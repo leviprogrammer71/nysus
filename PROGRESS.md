@@ -10,8 +10,8 @@
 | :---- | :--- | :----- |
 | 0     | Scaffold | **committed — awaiting user verification** |
 | 1     | Auth + Supabase | **committed — awaiting user verification** |
-| 2     | Design system + illustrations | pending |
-| 3     | Chat with Claude | pending |
+| 2     | Design system + illustrations | pending (illustrations deferred to user) |
+| 3     | Chat with Claude | **committed — awaiting user verification** |
 | 4     | Seedance generation | pending |
 | 5     | Continuity system | pending |
 | 6     | On-demand critique (_"Consult the chorus"_) | pending |
@@ -65,6 +65,33 @@ Security posture:
 - Service-role key only imported by server files; never exposed to browser.
 - `/setup` is the only unauthenticated route once env is configured; middleware redirects signed-out users to `/login` (and Phase-1-unconfigured to `/setup`).
 - RLS policies cover select / insert / update / delete on all three tables.
+
+---
+
+## Phase 3 — Chat with Claude
+
+Status: **committed — awaiting user verification**
+Last action: Director system prompt + OpenRouter streaming client + `/api/chat` SSE route with user-message persistence pre-stream and assistant-message persistence post-stream. Replaced the chat placeholder in the workspace with a live streaming chat panel that renders markdown via `react-markdown` and replaces `json-shot` code blocks with inline `ShotCard` components (Generate button disabled until Phase 4).
+Next action: User adds `OPENROUTER_API_KEY` to `.env.local` (already in `secrets.txt`), runs `npm install` to pick up `react-markdown` + `remark-gfm`, restarts dev, sends a test message inside a project.
+Blockers: OpenRouter API key. Model slug `anthropic/claude-opus-4` is the current default — **verify before shipping** (see the _Pre-flight model verification_ note in § Deviations).
+
+Files added:
+
+- `lib/prompts/director.ts` — `DIRECTOR_SYSTEM_PROMPT` from the brief plus `buildProjectContextSuffix()` that formats the per-turn PROJECT CONTEXT suffix
+- `lib/openrouter.ts` — typed `streamChatCompletion()` + tolerant `parseOpenRouterStream()` async generator (handles multi-byte chunk splits + `[DONE]` sentinel)
+- `app/api/chat/route.ts` — POST handler that loads project (RLS-gated), loads history (last 40 messages), persists user message, streams Claude back to client, persists assistant message on stream close
+- `app/projects/[id]/chat/chat-panel.tsx` — client component with optimistic user message, streaming assistant bubble with blinking cursor, auto-scroll, Stop button, error bubble, disabled voice-input stub (lights up in Phase 7)
+- `app/projects/[id]/chat/message.tsx` — `MessageBubble` that splits assistant content at `json-shot` fences and renders `ShotCard` inline
+- `app/projects/[id]/chat/shot-card.tsx` — the inline Generate-button card (button disabled in Phase 3)
+- `app/globals.css` — `.prose-nysus` class: minimal markdown styling that respects the Director's Desk palette instead of import­ing a full `prose` stack
+
+Key decisions:
+
+- **PROJECT CONTEXT is re-injected on every user turn**, not stored in the DB with the message. That way edits to the character sheet or aesthetic bible propagate to the entire historical conversation immediately, rather than baking stale context into old messages.
+- **User message persists before the stream starts.** If OpenRouter fails, the user's input stays in the transcript so they can retry without re-typing. The assistant message only persists after stream close (we accumulate on the server).
+- **Server runtime is `nodejs`** (not edge) for Supabase + robust fetch streaming. The brief's later phases (Phase 4 FFmpeg.wasm sampling, Phase 6 vision critique) will keep this runtime.
+- **No vision yet.** The `OpenRouterMessage` union includes the multipart image shape but Phase 3 only sends plain text. Vision wires up in Phase 6 when you tap _Consult the chorus_.
+- **react-markdown is an intentional add** instead of hand-rolling markdown. Claude's streaming responses use headings, bold, and lists freely; reimplementing that correctly would cost more than the ~30KB dep.
 
 Files touched:
 
@@ -132,7 +159,17 @@ If the design system renders correctly there, Phase 0 is green.
 - Tap "+ new →", create a project ("I Don't Even Like You Tho" is fine), land on the workspace stub with timeline / chat placeholders + character sheet + aesthetic bible panels.
 - Optionally run `supabase/seed/example_project.sql` to get the David/Maya seed project populated.
 
-If all that works, Phase 1 is green — reply "Phase 1 looks good" and I start Phase 3 (skipping Phase 2 illustrations per your earlier choice; we can revisit them any time).
+If all that works, Phase 1 is green.
+
+### Step 5 — Phase 3 chat
+
+1. Add `OPENROUTER_API_KEY` (from `secrets.txt`) to `.env.local` if you haven't.
+2. Re-run `npm install` to pick up `react-markdown` + `remark-gfm`.
+3. Restart `npm run dev`, open any project.
+4. Type something in the chat box — the director should reply in a streaming typewriter.
+5. Ask for "a shot that opens the series" and Claude should emit a `json-shot` code block, which the UI renders as an inline card with a (disabled-for-now) Generate button.
+
+If Claude replies and shot cards render, Phase 3 is green. Reply "Phase 3 looks good" and I start Phase 4 (Seedance generation, Replicate webhook, live timeline). Phase 2 illustrations stay deferred unless you want me to turn them on.
 
 ---
 
@@ -170,4 +207,5 @@ If a session dies mid-phase, the next agent:
 ## Commit log (tracked manually as a fallback)
 
 - Phase 0: scaffold Nysus — Next 16 + TS + Tailwind v4 + Director's Desk tokens + PWA manifest + placeholder icons
-- Phase 1: Supabase schema + RLS + magic-link auth (ALLOWED_EMAIL gate at 3 layers) + projects CRUD + /setup fallback. See `git log`.
+- Phase 1: Supabase schema + RLS + magic-link auth (ALLOWED_EMAIL gate at 3 layers) + projects CRUD + /setup fallback
+- Phase 3: director system prompt + OpenRouter streaming + /api/chat + live chat panel with json-shot card parser. See `git log`.

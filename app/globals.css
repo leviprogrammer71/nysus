@@ -71,3 +71,86 @@ body {
   border-top: 1px solid var(--color-ink);
   opacity: 0.15;
 }
+
+/*
+  .prose-nysus — minimal markdown styling for Claude's streaming
+  responses. Kept narrow on purpose: the Director's Desk voice is
+  serif + handwritten, not GitHub-readme.
+*/
+.prose-nysus p {
+  margin: 0 0 0.75em 0;
+}
+.prose-nysus p:last-child {
+  margin-bottom: 0;
+}
+.prose-nysus ul,
+.prose-nysus ol {
+  margin: 0 0 0.75em 1.25em;
+  padding: 0;
+}
+.prose-nysus ul {
+  list-style-type: disc;
+}
+.prose-nysus ol {
+  list-style-type: decimal;
+}
+.prose-nysus li {
+  margin: 0.15em 0;
+}
+.prose-nysus strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.prose-nysus em {
+  font-style: italic;
+  color: var(--color-ink-soft);
+}
+.prose-nysus h1,
+.prose-nysus h2,
+.prose-nysus h3,
+.prose-nysus h4 {
+  font-family: var(--font-display);
+  color: var(--color-ink);
+  margin: 0.5em 0 0.25em 0;
+  font-weight: 500;
+}
+.prose-nysus h1 { font-size: 1.4em; }
+.prose-nysus h2 { font-size: 1.25em; }
+.prose-nysus h3 { font-size: 1.12em; }
+.prose-nysus code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-paper-deep);
+  padding: 0.1em 0.3em;
+  border-radius: 0;
+}
+.prose-nysus pre {
+  background: var(--color-paper-deep);
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin: 0 0 0.75em 0;
+}
+.prose-nysus pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.82em;
+  line-height: 1.5;
+}
+.prose-nysus blockquote {
+  border-left: 2px solid var(--color-sepia);
+  padding-left: 0.8em;
+  margin: 0.5em 0;
+  color: var(--color-ink-soft);
+  font-style: italic;
+}
+.prose-nysus a {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-nysus hr {
+  border: none;
+  border-top: 1px solid var(--color-ink);
+  opacity: 0.15;
+  margin: 1em 0;
+}
