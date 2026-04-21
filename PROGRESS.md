@@ -8,8 +8,8 @@
 
 | Phase | Name | Status |
 | :---- | :--- | :----- |
-| 0     | Scaffold | **in progress — awaiting user verification** |
-| 1     | Auth + Supabase | pending |
+| 0     | Scaffold | **committed — awaiting user verification** |
+| 1     | Auth + Supabase | **committed — awaiting user verification** |
 | 2     | Design system + illustrations | pending |
 | 3     | Chat with Claude | pending |
 | 4     | Seedance generation | pending |
@@ -24,9 +24,47 @@
 ## Phase 0 — Scaffold
 
 Status: **committed — awaiting user verification**
-Last action: Committed Phase 0 on branch `main` (see `git log`). Working tree clean, git fsck clean, no secret patterns in the staged diff (checked before commit).
-Next action: User runs `npm install && npm run dev` locally, confirms localhost renders the cream/navy placeholder page. Once confirmed, Phase 0 is green and we begin Phase 1.
-Blockers: None on my side. **User verification required** (see _How to verify Phase 0_ below).
+Last action: Committed Phase 0 on branch `main`. Working tree clean, git fsck clean, no secret patterns in the staged diff (checked before commit).
+Next action: User runs `npm install && npm run dev` locally. Because Phase 1 is also committed, running dev without Supabase env will land on the **`/setup`** page (by design — middleware short-circuits to `/setup` until Supabase env is populated). Phase 0 visual check is still valid there: cream bg, navy wordmark, Caveat highlight on "setup", thin rule, "after Dionysus" footer. If those render, scaffold is good.
+Blockers: None on my side. **User verification required** (see _How to verify Phase 0 + 1_ below).
+
+---
+
+## Phase 1 — Auth + Supabase
+
+Status: **committed — awaiting user verification**
+Last action: Wrote the full schema migration, the "I Don't Even Like You Tho" seed project, typed Supabase client helpers (browser / server / service-role), magic-link login with ALLOWED_EMAIL gate at three layers, middleware-based session refresh, and projects CRUD (list / new / detail stub).
+Next action: User creates Supabase project, runs `supabase/migrations/0001_init.sql` in the SQL editor, sets Auth redirect URL to `<APP_URL>/auth/callback`, populates `.env.local`, restarts dev. Sign in with magic link, create a project, see it at `/`. Optionally run `supabase/seed/example_project.sql` to bootstrap the example series.
+Blockers: Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_EMAIL`, `NEXT_PUBLIC_APP_URL`) need to be set before Phase 1 routes will boot — without them, every request 302s to `/setup`.
+
+Files added:
+
+- `supabase/migrations/0001_init.sql` — projects, clips, messages; RLS on all three (auth.uid() = user_id direct or joined); storage bucket `clips`; `touch_updated_at` trigger
+- `supabase/seed/example_project.sql` — "I Don't Even Like You Tho" with David + Maya character sheet + aesthetic bible
+- `lib/env.ts` — typed env getters (throw on missing) + `envStatus()` / `isSupabaseConfigured()` for graceful degradation
+- `lib/auth.ts` — `isAllowedEmail` / `assertAllowedEmail`
+- `lib/projects.ts` — Zod input schema for project CRUD
+- `lib/shot-prompt.ts` — Zod schema + `extractShotPrompts` for the Phase-3 `json-shot` parser (shipped early so types line up)
+- `lib/supabase/types.ts` — hand-typed `Database` (regenerate via `supabase gen types` once project is live)
+- `lib/supabase/client.ts` — browser client (`createBrowserClient`)
+- `lib/supabase/server.ts` — cookies-aware server client + service-role client
+- `lib/supabase/middleware.ts` — session refresh helper
+- `middleware.ts` — root middleware: short-circuit to `/setup` if Supabase unconfigured, otherwise require session + ALLOWED_EMAIL, bounce signed-in users away from `/login`
+- `app/setup/page.tsx` — env-status landing with per-phase checklist and Supabase quickstart
+- `app/login/{page,login-form,actions}.tsx` — magic-link form (server action), ALLOWED_EMAIL gate at send time
+- `app/auth/callback/route.ts` — exchange code for session, second ALLOWED_EMAIL check, sign out + redirect if mismatch
+- `app/auth/signout/route.ts` — POST-only signout
+- `app/actions.ts` — `createProject`, `deleteProject` server actions
+- `app/page.tsx` — replaced placeholder with authenticated projects list + empty state
+- `app/projects/new/{page,new-project-form}.tsx` — title + description form
+- `app/projects/[id]/page.tsx` — workspace stub with timeline / chat placeholders (real impl in Phase 3/4) + character sheet + aesthetic bible panels
+
+Security posture:
+
+- ALLOWED_EMAIL enforced at three layers: login server action, `/auth/callback` post-exchange, middleware on every request.
+- Service-role key only imported by server files; never exposed to browser.
+- `/setup` is the only unauthenticated route once env is configured; middleware redirects signed-out users to `/login` (and Phase-1-unconfigured to `/setup`).
+- RLS policies cover select / insert / update / delete on all three tables.
 
 Files touched:
 
@@ -54,32 +92,47 @@ Files touched:
 
 ---
 
-## How to verify Phase 0 on your machine
+## How to verify Phase 0 + 1 on your machine
+
+### Step 1 — install and boot
 
 ```bash
 cd /Users/becareful/Movies/Nysus
-
-# 1. Install dependencies
 npm install
-
-# 2. Quick sanity checks
 npm run typecheck
 npm run build
-
-# 3. Boot dev server
-npm run dev
-# open http://localhost:3000
+npm run dev          # http://localhost:3000
 ```
 
-You should see:
+### Step 2 — Phase 0 visual (zero env needed)
+
+Without any env set, the middleware redirects everything to `/setup`. You should see:
 
 - Cream (`#F5EFE0`) page background
-- Navy (`#1B2A3A`) serif "NYSUS" wordmark in Cormorant Garamond with letter-spacing
-- Handwritten "a filmmaker's *notebook*" tagline in Caveat, with `notebook` highlighted in the dusty yellow
-- Thin ink rule
+- Navy (`#1B2A3A`) Cormorant "NYSUS" wordmark with letter-spacing
+- Handwritten tagline in Caveat with a yellow highlighter streak
 - "after Dionysus" footer in small caps
+- A status table showing which env vars are missing, and a numbered Supabase quickstart
 
-If that renders, Phase 0 is green. Reply with "Phase 0 looks good" (or flag what's off) and I start Phase 1.
+If the design system renders correctly there, Phase 0 is green.
+
+### Step 3 — Phase 1 setup
+
+1. Create a Supabase project (see the quickstart on `/setup`).
+2. Copy `.env.example` to `.env.local` and fill in the Supabase + app values. Use the tokens staged in `secrets.txt` for Replicate / OpenRouter / the two Supabase JWTs.
+3. In the Supabase SQL editor, paste and run `supabase/migrations/0001_init.sql`.
+4. In Supabase → Authentication → URL Configuration, add `http://localhost:3000/auth/callback` (and `https://nysus.media/auth/callback` once you have prod) as an allowed redirect.
+5. Restart `npm run dev`.
+
+### Step 4 — Phase 1 visual + flow
+
+- `/` should now 302 to `/login`.
+- Sign in with your email; magic link lands in your inbox.
+- Clicking the link redirects to `/auth/callback` and then `/`, which now shows the empty-projects state (the "∅" + "the notebook is empty" copy).
+- Tap "+ new →", create a project ("I Don't Even Like You Tho" is fine), land on the workspace stub with timeline / chat placeholders + character sheet + aesthetic bible panels.
+- Optionally run `supabase/seed/example_project.sql` to get the David/Maya seed project populated.
+
+If all that works, Phase 1 is green — reply "Phase 1 looks good" and I start Phase 3 (skipping Phase 2 illustrations per your earlier choice; we can revisit them any time).
 
 ---
 
@@ -116,4 +169,5 @@ If a session dies mid-phase, the next agent:
 
 ## Commit log (tracked manually as a fallback)
 
-- Phase 0: scaffold Nysus — Next 16 + TS + Tailwind v4 + Director's Desk tokens + PWA manifest + placeholder icons. See `git log -1`.
+- Phase 0: scaffold Nysus — Next 16 + TS + Tailwind v4 + Director's Desk tokens + PWA manifest + placeholder icons
+- Phase 1: Supabase schema + RLS + magic-link auth (ALLOWED_EMAIL gate at 3 layers) + projects CRUD + /setup fallback. See `git log`.
