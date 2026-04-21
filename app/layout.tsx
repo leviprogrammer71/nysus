@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter, Caveat, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { InstallPrompt } from "./install-prompt";
 
 // Director's Desk typography stack — see PROGRESS.md § Design System
 const display = Cormorant_Garamond({
@@ -64,6 +65,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-paper text-ink font-body">
         {children}
+        <InstallPrompt />
       </body>
     </html>
   );

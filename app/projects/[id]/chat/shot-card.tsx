@@ -1,14 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import type { ShotPrompt } from "@/lib/shot-prompt";
 
 /**
  * Inline card rendered in place of a ```json-shot code block.
  *
- * The Generate button is disabled in Phase 3 (no backend yet) — lights
- * up in Phase 4 when /api/generate lands.
+ * Generate handler is wired from Workspace so the timeline updates
+ * optimistically when tapped.
  */
-export function ShotCard({ shot }: { shot: ShotPrompt }) {
+export function ShotCard({
+  shot,
+  onGenerate,
+}: {
+  shot: ShotPrompt;
+  onGenerate?: (shot: ShotPrompt) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!onGenerate || busy) return;
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate?.([10, 30, 10]);
+    }
+    setBusy(true);
+    try {
+      await onGenerate(shot);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="my-4 border border-ink/30 bg-paper">
       <header className="flex items-center justify-between px-4 py-2 bg-paper-deep border-b border-ink/20">
@@ -51,15 +73,15 @@ export function ShotCard({ shot }: { shot: ShotPrompt }) {
 
       <footer className="flex items-center justify-between px-4 py-2 border-t border-ink/20">
         <p className="font-hand text-sm text-ink-soft/70">
-          generation arrives in phase 4
+          seeds from the last completed shot by default
         </p>
         <button
           type="button"
-          disabled
-          className="px-4 py-1.5 bg-ink text-paper font-body text-sm tracking-wide opacity-40 cursor-not-allowed"
-          title="Seedance generation wires up in Phase 4"
+          onClick={handleGenerate}
+          disabled={!onGenerate || busy}
+          className="px-4 py-1.5 bg-ink text-paper font-body text-sm tracking-wide hover:bg-ink-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Generate &rarr;
+          {busy ? "Queueing…" : "Generate →"}
         </button>
       </footer>
     </div>

@@ -8,16 +8,16 @@
 
 | Phase | Name | Status |
 | :---- | :--- | :----- |
-| 0     | Scaffold | **committed — awaiting user verification** |
-| 1     | Auth + Supabase | **committed — awaiting user verification** |
-| 2     | Design system + illustrations | pending (illustrations deferred to user) |
-| 3     | Chat with Claude | **committed — awaiting user verification** |
-| 4     | Seedance generation | pending |
-| 5     | Continuity system | pending |
-| 6     | On-demand critique (_"Consult the chorus"_) | pending |
-| 7     | Voice input | pending |
-| 8     | Stitch / export | pending |
-| 9     | Polish | pending |
+| 0     | Scaffold | **committed** |
+| 1     | Auth + Supabase | **committed** |
+| 2     | Design system + illustrations | design system ✓ · illustrations deferred to user (Flux batch) |
+| 3     | Chat with Claude | **committed** |
+| 4     | Seedance generation | **committed** |
+| 5     | Continuity system | **committed** |
+| 6     | On-demand critique (_"Consult the chorus"_) | **committed** |
+| 7     | Voice input | **committed** (quick dictation — long-form script mode deferred) |
+| 8     | Stitch / export | **committed** |
+| 9     | Polish | **committed** |
 
 ---
 
@@ -92,6 +92,68 @@ Key decisions:
 - **Server runtime is `nodejs`** (not edge) for Supabase + robust fetch streaming. The brief's later phases (Phase 4 FFmpeg.wasm sampling, Phase 6 vision critique) will keep this runtime.
 - **No vision yet.** The `OpenRouterMessage` union includes the multipart image shape but Phase 3 only sends plain text. Vision wires up in Phase 6 when you tap _Consult the chorus_.
 - **react-markdown is an intentional add** instead of hand-rolling markdown. Claude's streaming responses use headings, bold, and lists freely; reimplementing that correctly would cost more than the ~30KB dep.
+
+---
+
+## Phase 4 — Seedance generation
+
+Status: **committed**
+
+- `lib/replicate.ts` — typed REST wrapper for `/v1/predictions`: `createPrediction`, `getPrediction`, `cancelPrediction`, `fetchReplicateOutputAsBlob` for mirroring signed output URLs into our own storage.
+- `lib/seedance.ts` — Zod input schema + `buildSeedanceInput` adapter. Default model `bytedance/seedance-1-pro`, overridable via `SEEDANCE_MODEL` env (slug still subject to verification).
+- `lib/clips.ts` — `mirrorPredictionToClip` (used by both webhook and cron fallback) downloads the prediction output, uploads to the `clips` bucket at `{project}/{clip}/video.mp4`, updates status → `complete` / `failed`. `refreshClipFromReplicate` is the idempotent "ask Replicate and sync" helper.
+- `app/api/generate/route.ts` — POST. Computes next `order_index`, inserts queued clip, creates prediction, stores `replicate_prediction_id`, returns clip id to the client. Webhook URL carries the clip id + CRON_SECRET.
+- `app/api/replicate/webhook/route.ts` — authenticated by `?secret=CRON_SECRET`. Mirrors to storage + updates row. Prediction-id mismatch returns 409.
+- `app/api/clips/pending/route.ts` — Vercel Cron handler, runs every minute. Polls any queued/processing clip older than 60s and pushes it through the mirror. Auth via `Authorization: Bearer CRON_SECRET` (Vercel sends this automatically) or `?secret=`.
+- `app/api/clips/[id]/route.ts` — GET polls the row and proactively refreshes from Replicate when pending. DELETE cancels the prediction, wipes storage, and removes the row.
+- `app/api/clips/[id]/regenerate/route.ts` — POST replaces the current clip in-place with a new prediction (same prompt + seed).
+- `app/api/clips/[id]/signed-url/route.ts` — GET returns a 1-hour signed URL for `video`, `last_frame`, or `sampled_0..2`.
+- `app/projects/[id]/workspace.tsx` — owns clip state for the whole project page. Client polls every 3s for any non-terminal clip; the poll endpoint pushes refreshes into Replicate, so dev without a webhook tunnel still lands on the final state within a poll cycle.
+- `app/projects/[id]/timeline/*` — Timeline (horizontal scroll), ClipCard (thumbnail + status badge), ClipDetailSheet (video player + actions: regenerate / change seed / Consult the chorus / delete).
+- `vercel.json` — `*/1 * * * *` cron hitting `/api/clips/pending`.
+
+## Phase 5 — Continuity system
+
+Status: **committed**
+
+- `lib/ffmpeg.ts` — lazy FFmpeg.wasm loader (single-threaded build from unpkg, no SharedArrayBuffer requirement), `extractFrames(video, times)`, `concatMp4s(clips)`.
+- `app/projects/[id]/timeline/use-frame-extraction.ts` — one-time hook that fires when a completed clip is opened. Extracts ~1s / mid / end frames, POSTs them as multipart to `/api/clips/[id]/frames`, then updates the parent state so the next Generate seeds from the fresh `last_frame_url`.
+- `app/api/clips/[id]/frames/route.ts` — accepts the multipart payload, uploads each JPG into the clips bucket, signs short URLs, stores them on the clip row.
+- Workspace auto-seed flow: on Generate, the workspace reads the most-recent completed clip's `last_frame_url` and passes it to `/api/generate` with `seed_source: "auto"`. Manual scrubber override is a stub (TODO: Phase 5.5) — "change seed frame" button currently shows a note.
+
+## Phase 6 — On-demand critique ("Consult the chorus")
+
+Status: **committed**
+
+- `app/api/clips/[id]/critique/route.ts` — POST. Gated by `CRITIQUE_MODE=on_demand` (returns 500 otherwise). Signs the 3 stored sample frames, builds a vision request to OpenRouter using the director prompt + project context + `{type: "image_url"}` blocks, buffers the response, persists the critique as an assistant message in the project's chat history so it shows up the next time you open the transcript.
+- "Consult the chorus" button in `ClipDetailSheet` calls it, renders the result inline in a `the chorus says` card.
+- Frame sampling is silent — it happens via `useFrameExtraction` on clip open and stays local + stored silently. **No Claude call ever happens on clip completion.** If a future contributor wires auto-critique, this is a bug (see `AGENTS.md`).
+
+## Phase 7 — Voice input
+
+Status: **committed** (quick dictation). Long-form "script mode" with voice commands deferred.
+
+- `lib/use-dictation.ts` — `useDictation` hook wrapping `(webkit)SpeechRecognition`. Continuous + interimResults; 2-second silence auto-stops; `onFinal` callback appends the finalized text to the input.
+- Chat panel mic button: disabled on unsupported browsers (Firefox, older Safari) with a clear tooltip. Pulses in `wine-dark` while listening. Haptic buzz on tap. Live interim transcript below the input in handwritten type.
+
+## Phase 8 — Stitch / export
+
+Status: **committed**
+
+- `app/projects/[id]/stitch/page.tsx` + `stitch-view.tsx` — lists clips in order with up/down reorder arrows, shows ready vs skipped counts, `Export MP4` button pulls signed URLs, hands blobs to `concatMp4s`, and triggers a download of `<project>-stitched.mp4`.
+- All client-side — nothing round-trips through the server during stitching.
+
+## Phase 9 — Polish
+
+Status: **committed**
+
+- `app/error.tsx` — global error boundary with "the reel jammed" copy + Try again / Home.
+- `app/not-found.tsx` — "cut" empty state.
+- `app/install-prompt.tsx` — `beforeinstallprompt` listener, shows on second visit, dismissal persists in localStorage, wired into root layout.
+- Haptic feedback on Send (light tap) and Generate (pattern).
+- Typography/empty-state pass consistent across projects list, setup, login, workspace, stitch.
+- `next.config.ts` — security headers (CSP-adjacent set: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`).
+- Project edit page at `/projects/[id]/edit` with title / description / character_sheet JSON / aesthetic_bible JSON — backed by PATCH `/api/projects/[id]`.
 
 Files touched:
 
@@ -208,4 +270,5 @@ If a session dies mid-phase, the next agent:
 
 - Phase 0: scaffold Nysus — Next 16 + TS + Tailwind v4 + Director's Desk tokens + PWA manifest + placeholder icons
 - Phase 1: Supabase schema + RLS + magic-link auth (ALLOWED_EMAIL gate at 3 layers) + projects CRUD + /setup fallback
-- Phase 3: director system prompt + OpenRouter streaming + /api/chat + live chat panel with json-shot card parser. See `git log`.
+- Phase 3: director system prompt + OpenRouter streaming + /api/chat + live chat panel with json-shot card parser
+- Phases 4–9: Seedance generation + webhook + cron, FFmpeg.wasm continuity, on-demand critique, voice dictation, stitch/export, polish. See `git log`.

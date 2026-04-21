@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageBubble, type ChatMessage } from "./message";
+import type { ShotPrompt } from "@/lib/shot-prompt";
+import { useDictation } from "@/lib/use-dictation";
 
 export function ChatPanel({
   projectId,
   initialMessages,
+  onGenerate,
 }: {
   projectId: string;
   initialMessages: ChatMessage[];
+  onGenerate?: (shot: ShotPrompt) => Promise<void>;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -18,6 +22,12 @@ export function ChatPanel({
   const abortRef = useRef<AbortController | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const dictation = useDictation({
+    onFinal: (text) => {
+      setInput((prev) => (prev ? `${prev.trimEnd()} ${text}` : text));
+    },
+  });
 
   // Auto-scroll to bottom on new content.
   useEffect(() => {
@@ -46,6 +56,7 @@ export function ChatPanel({
     const text = input.trim();
     if (!text || streaming) return;
 
+    if ("vibrate" in navigator) navigator.vibrate?.(6);
     setError(null);
     setInput("");
 
@@ -138,7 +149,9 @@ export function ChatPanel({
         className="flex-1 overflow-y-auto px-5 py-6 space-y-6 scroll-smooth"
       >
         {hasMessages ? (
-          messages.map((m) => <MessageBubble key={m.id} message={m} />)
+          messages.map((m) => (
+            <MessageBubble key={m.id} message={m} onGenerate={onGenerate} />
+          ))
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-center gap-4 px-4">
             <p className="font-hand text-2xl text-ink-soft">
@@ -169,12 +182,44 @@ export function ChatPanel({
         <div className="flex items-end gap-3">
           <button
             type="button"
-            aria-label="Voice input (Phase 7)"
-            disabled
-            className="shrink-0 w-10 h-10 rounded-full border border-ink/30 text-ink-soft/50 font-hand text-lg flex items-center justify-center cursor-not-allowed"
-            title="Voice input arrives in Phase 7"
+            aria-label={
+              dictation.listening
+                ? "Stop dictation"
+                : dictation.supported
+                ? "Dictate"
+                : "Voice not supported in this browser"
+            }
+            onClick={() => {
+              if ("vibrate" in navigator) navigator.vibrate?.(10);
+              dictation.toggle();
+            }}
+            disabled={!dictation.supported || streaming}
+            title={
+              dictation.supported
+                ? "Tap to dictate; again (or silence) to stop"
+                : "Voice input requires Chrome or Safari"
+            }
+            className={`shrink-0 w-10 h-10 rounded-full border flex items-center justify-center transition-colors ${
+              dictation.listening
+                ? "bg-wine-dark text-paper border-wine-dark animate-pulse"
+                : "border-ink/30 text-ink-soft hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+            }`}
           >
-            ♪
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="3" width="6" height="12" rx="3" />
+              <path d="M5 11a7 7 0 0 0 14 0" />
+              <path d="M12 18v3" />
+            </svg>
           </button>
 
           <textarea
@@ -208,7 +253,17 @@ export function ChatPanel({
         </div>
 
         <p className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50 mt-2">
-          enter to send · shift+enter for newline
+          {dictation.listening ? (
+            <span className="text-wine-dark font-hand text-sm normal-case tracking-normal">
+              listening… {dictation.interim}
+            </span>
+          ) : dictation.error ? (
+            <span className="text-red-grease font-hand text-sm normal-case tracking-normal">
+              {dictation.error}
+            </span>
+          ) : (
+            <>enter to send · shift+enter for newline</>
+          )}
         </p>
       </form>
     </div>

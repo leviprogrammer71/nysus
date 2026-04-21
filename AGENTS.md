@@ -33,3 +33,6 @@ User preferences that override the original Cowork brief:
 - Illustration batch via Flux 1.1 Pro in Phase 2: **deferred** to user. Placeholder N-mark icons ship in Phase 0.
 - `next-pwa` itself: **deferred** to Phase 9. Phase 0 ships static `manifest.webmanifest` + theme-color only.
 - Framework: **Next.js 16** (not 15 as the brief said). Backward-compatible; keep unless user asks to downgrade.
+- Voice input Phase 7: only "quick dictation" shipped. The brief's long-form "script mode" with voice commands (`new shot`, `scratch that`, `send to Claude`, `character note:`) is not wired up. Add here if you implement it.
+- Seed-frame manual scrubber Phase 5: the button currently shows a TODO alert. Implementing it means rendering the prior completed clip's video with a frame-by-frame scrubber + "use this frame" action that calls FFmpeg.wasm `extractFrames` at the chosen time.
+- `/public/{next,vercel,window,file,globe}.svg` are neutralized placeholders (fuse-mount in the setup sandbox wouldn't let me delete them). Feel free to delete them locally.
