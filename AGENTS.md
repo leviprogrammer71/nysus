@@ -33,6 +33,6 @@ User preferences that override the original Cowork brief:
 - Illustration batch via Flux 1.1 Pro in Phase 2: **deferred** to user. Placeholder N-mark icons ship in Phase 0.
 - `next-pwa` itself: **deferred** to Phase 9. Phase 0 ships static `manifest.webmanifest` + theme-color only.
 - Framework: **Next.js 16** (not 15 as the brief said). Backward-compatible; keep unless user asks to downgrade.
-- Voice input Phase 7: only "quick dictation" shipped. The brief's long-form "script mode" with voice commands (`new shot`, `scratch that`, `send to Claude`, `character note:`) is not wired up. Add here if you implement it.
+- Voice input Phase 7: both modes shipped. Quick dictation = tap-toggle on the mic. Script mode = long-press the mic; full-screen overlay with hand-drawn animated sine wave, voice commands (`new shot`, `scratch that`, `send to Claude`, `character note:`), interim transcript in Caveat, transcript prepended with a "User dictated this aloud" hint when sent to Claude.
 - Seed-frame scrubber (Phase 5.5) IS shipped: `app/projects/[id]/timeline/seed-picker.tsx` — scrub a prior clip, upload a file, or paste from clipboard. Backed by `/api/clips/[id]/seed` (POST + DELETE).
 - `/public/{next,vercel,window,file,globe}.svg` are neutralized placeholders (fuse-mount in the setup sandbox wouldn't let me delete them). Feel free to delete them locally.

@@ -15,7 +15,7 @@
 | 4     | Seedance generation | **committed** |
 | 5     | Continuity system | **committed** |
 | 6     | On-demand critique (_"Consult the chorus"_) | **committed** |
-| 7     | Voice input | **committed** (quick dictation — long-form script mode deferred) |
+| 7     | Voice input | **committed** (quick dictation + long-form script mode with voice commands) |
 | 8     | Stitch / export | **committed** |
 | 9     | Polish | **committed** |
 
@@ -140,10 +140,19 @@ Status: **committed**
 
 ## Phase 7 — Voice input
 
-Status: **committed** (quick dictation). Long-form "script mode" with voice commands deferred.
+Status: **committed** — both modes shipped.
+
+Quick dictation:
 
 - `lib/use-dictation.ts` — `useDictation` hook wrapping `(webkit)SpeechRecognition`. Continuous + interimResults; 2-second silence auto-stops; `onFinal` callback appends the finalized text to the input.
-- Chat panel mic button: disabled on unsupported browsers (Firefox, older Safari) with a clear tooltip. Pulses in `wine-dark` while listening. Haptic buzz on tap. Live interim transcript below the input in handwritten type.
+- Chat panel mic: disabled on unsupported browsers (Firefox, older Safari) with a clear tooltip. Pulses in `wine-dark` while listening. Haptic buzz on tap. Live interim transcript below the input in handwritten type.
+
+Script mode (long-press mic):
+
+- `lib/use-script-dictation.ts` — continuous dictation with in-stream voice-command parsing. Commands `new shot` (insert break), `scratch that` (drop last sentence), `send to Claude` (finalize + submit), `character note:` (tag next line) are detected in the final-chunk stream and stripped from the transcript before it reaches Claude.
+- `app/projects/[id]/chat/script-mode-overlay.tsx` — full-screen overlay with a hand-drawn animated sine-wave (not a generic bar visualizer), transcript in Caveat while listening, on-screen hint strip, Cancel / Send buttons.
+- Long-press (~450ms) on the mic button opens the overlay with a distinctive haptic pattern; short tap still toggles quick dictation.
+- Voice-sourced transcripts are sent to `/api/chat` with a dictation-hint prefix so Claude interprets transcription errors generously.
 
 ## Phase 8 — Stitch / export
 

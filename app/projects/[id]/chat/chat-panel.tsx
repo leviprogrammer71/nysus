@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageBubble, type ChatMessage } from "./message";
 import type { ShotPrompt } from "@/lib/shot-prompt";
 import { useDictation } from "@/lib/use-dictation";
+import { ScriptModeOverlay } from "./script-mode-overlay";
 
 export function ChatPanel({
   projectId,
@@ -29,6 +30,11 @@ export function ChatPanel({
     },
   });
 
+  // Script-mode overlay (long-press mic)
+  const [scriptOpen, setScriptOpen] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+
   // Auto-scroll to bottom on new content.
   useEffect(() => {
     const el = scrollerRef.current;
@@ -52,13 +58,19 @@ export function ChatPanel({
     return () => abortRef.current?.abort();
   }, []);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
+  const sendText = useCallback(async (
+    rawText: string,
+    opts?: { source?: "voice" },
+  ) => {
+    const text = rawText.trim();
     if (!text || streaming) return;
 
     if ("vibrate" in navigator) navigator.vibrate?.(6);
     setError(null);
-    setInput("");
+    const messageToSend =
+      opts?.source === "voice"
+        ? `[User dictated this aloud, may contain transcription errors — interpret generously, ask clarifying questions if ambiguous.]\n\n${text}`
+        : text;
 
     // Optimistically append the user message + a placeholder assistant
     // message that we'll mutate as the stream arrives.
@@ -83,7 +95,7 @@ export function ChatPanel({
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id: projectId, message: text }),
+        body: JSON.stringify({ project_id: projectId, message: messageToSend }),
         signal: controller.signal,
       });
 
@@ -127,7 +139,13 @@ export function ChatPanel({
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, projectId]);
+  }, [streaming, projectId]);
+
+  const send = useCallback(async () => {
+    const text = input;
+    setInput("");
+    await sendText(text);
+  }, [input, sendText]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -186,17 +204,37 @@ export function ChatPanel({
               dictation.listening
                 ? "Stop dictation"
                 : dictation.supported
-                ? "Dictate"
+                ? "Dictate (long-press for script mode)"
                 : "Voice not supported in this browser"
             }
-            onClick={() => {
+            onPointerDown={() => {
+              longPressedRef.current = false;
+              if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+              longPressTimerRef.current = setTimeout(() => {
+                longPressedRef.current = true;
+                if ("vibrate" in navigator) navigator.vibrate?.([10, 30, 10]);
+                setScriptOpen(true);
+              }, 450);
+            }}
+            onPointerUp={() => {
+              if (longPressTimerRef.current) {
+                clearTimeout(longPressTimerRef.current);
+                longPressTimerRef.current = null;
+              }
+              if (longPressedRef.current) return; // long-press already fired
               if ("vibrate" in navigator) navigator.vibrate?.(10);
               dictation.toggle();
+            }}
+            onPointerLeave={() => {
+              if (longPressTimerRef.current) {
+                clearTimeout(longPressTimerRef.current);
+                longPressTimerRef.current = null;
+              }
             }}
             disabled={!dictation.supported || streaming}
             title={
               dictation.supported
-                ? "Tap to dictate; again (or silence) to stop"
+                ? "Tap to dictate; long-press for script mode"
                 : "Voice input requires Chrome or Safari"
             }
             className={`shrink-0 w-10 h-10 rounded-full border flex items-center justify-center transition-colors ${
@@ -262,10 +300,18 @@ export function ChatPanel({
               {dictation.error}
             </span>
           ) : (
-            <>enter to send · shift+enter for newline</>
+            <>enter to send · shift+enter for newline · long-press mic for script mode</>
           )}
         </p>
       </form>
+
+      <ScriptModeOverlay
+        open={scriptOpen}
+        onClose={() => setScriptOpen(false)}
+        onSubmit={(text) => {
+          void sendText(text, { source: "voice" });
+        }}
+      />
     </div>
   );
 }
