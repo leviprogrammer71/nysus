@@ -287,6 +287,16 @@ export function Workspace({
 
       <ClipDetailSheet
         clip={openClip}
+        priorCompletedClips={
+          openClip
+            ? clips.filter(
+                (c) =>
+                  c.status === "complete" &&
+                  !c.id.startsWith("pending-") &&
+                  c.order_index < openClip.order_index,
+              )
+            : []
+        }
         onClose={() => setOpenClipId(null)}
         onUpdate={upsertClip}
       />

@@ -34,5 +34,5 @@ User preferences that override the original Cowork brief:
 - `next-pwa` itself: **deferred** to Phase 9. Phase 0 ships static `manifest.webmanifest` + theme-color only.
 - Framework: **Next.js 16** (not 15 as the brief said). Backward-compatible; keep unless user asks to downgrade.
 - Voice input Phase 7: only "quick dictation" shipped. The brief's long-form "script mode" with voice commands (`new shot`, `scratch that`, `send to Claude`, `character note:`) is not wired up. Add here if you implement it.
-- Seed-frame manual scrubber Phase 5: the button currently shows a TODO alert. Implementing it means rendering the prior completed clip's video with a frame-by-frame scrubber + "use this frame" action that calls FFmpeg.wasm `extractFrames` at the chosen time.
+- Seed-frame scrubber (Phase 5.5) IS shipped: `app/projects/[id]/timeline/seed-picker.tsx` — scrub a prior clip, upload a file, or paste from clipboard. Backed by `/api/clips/[id]/seed` (POST + DELETE).
 - `/public/{next,vercel,window,file,globe}.svg` are neutralized placeholders (fuse-mount in the setup sandbox wouldn't let me delete them). Feel free to delete them locally.

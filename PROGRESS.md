@@ -119,7 +119,16 @@ Status: **committed**
 - `lib/ffmpeg.ts` — lazy FFmpeg.wasm loader (single-threaded build from unpkg, no SharedArrayBuffer requirement), `extractFrames(video, times)`, `concatMp4s(clips)`.
 - `app/projects/[id]/timeline/use-frame-extraction.ts` — one-time hook that fires when a completed clip is opened. Extracts ~1s / mid / end frames, POSTs them as multipart to `/api/clips/[id]/frames`, then updates the parent state so the next Generate seeds from the fresh `last_frame_url`.
 - `app/api/clips/[id]/frames/route.ts` — accepts the multipart payload, uploads each JPG into the clips bucket, signs short URLs, stores them on the clip row.
-- Workspace auto-seed flow: on Generate, the workspace reads the most-recent completed clip's `last_frame_url` and passes it to `/api/generate` with `seed_source: "auto"`. Manual scrubber override is a stub (TODO: Phase 5.5) — "change seed frame" button currently shows a note.
+- Workspace auto-seed flow: on Generate, the workspace reads the most-recent completed clip's `last_frame_url` and passes it to `/api/generate` with `seed_source: "auto"`.
+
+### Phase 5.5 — Manual seed override
+
+- `app/projects/[id]/timeline/seed-picker.tsx` — bottom-sheet overlay with three sources:
+  1. **Scrub a prior clip** — pick a source clip, scrub its video, FFmpeg.wasm extracts the frame at the chosen time.
+  2. **Upload** — file picker for JPG/PNG.
+  3. **Paste** — `⌘V` while the sheet is focused grabs an image from the clipboard (iOS screenshots).
+- `app/api/clips/[id]/seed` — POST (multipart `frame` + `source`) uploads the chosen seed to `{project}/{clip}/seed.jpg`, signs a 6-hour URL, updates `clips.seed_image_url` + `seed_source`. DELETE clears back to `none`.
+- Wired to the Clip Detail Sheet's "change seed frame" button; applies updates optimistically so the timeline reflects the new seed without a reload.
 
 ## Phase 6 — On-demand critique ("Consult the chorus")
 

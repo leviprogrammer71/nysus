@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TimelineClip } from "./types";
 import { useFrameExtraction } from "./use-frame-extraction";
+import { SeedPicker } from "./seed-picker";
 
 /**
  * Bottom sheet that opens when you tap a timeline clip. Video player,
@@ -15,13 +16,16 @@ import { useFrameExtraction } from "./use-frame-extraction";
  */
 export function ClipDetailSheet({
   clip,
+  priorCompletedClips,
   onClose,
   onUpdate,
 }: {
   clip: TimelineClip | null;
+  priorCompletedClips: TimelineClip[];
   onClose: () => void;
   onUpdate: (clip: TimelineClip) => void;
 }) {
+  const [seedPickerOpen, setSeedPickerOpen] = useState(false);
   // Keyed by clip id so stale fetches never show the wrong video.
   const [videoSigned, setVideoSigned] = useState<{ id: string; url: string } | null>(null);
   const [critiquing, setCritiquing] = useState(false);
@@ -239,7 +243,7 @@ export function ClipDetailSheet({
             </button>
             <button
               type="button"
-              onClick={() => alert("Seed-frame scrubber lands in Phase 5.")}
+              onClick={() => setSeedPickerOpen(true)}
               className="px-3 py-2 bg-paper border border-ink/40 text-ink font-body text-sm tracking-wide hover:border-ink transition-colors"
             >
               change seed frame
@@ -268,6 +272,22 @@ export function ClipDetailSheet({
           ) : null}
         </div>
       </div>
+
+      {clip ? (
+        <SeedPicker
+          open={seedPickerOpen}
+          onClose={() => setSeedPickerOpen(false)}
+          targetClip={clip}
+          candidateClips={priorCompletedClips}
+          onApplied={({ seed_image_url, seed_source }) => {
+            onUpdate({
+              ...clip,
+              seed_image_url,
+              seed_source,
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
