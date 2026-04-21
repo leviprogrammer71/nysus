@@ -22,10 +22,16 @@ export function ClipDetailSheet({
   onClose: () => void;
   onUpdate: (clip: TimelineClip) => void;
 }) {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  // Keyed by clip id so stale fetches never show the wrong video.
+  const [videoSigned, setVideoSigned] = useState<{ id: string; url: string } | null>(null);
   const [critiquing, setCritiquing] = useState(false);
-  const [critique, setCritique] = useState<string | null>(null);
-  const [critiqueError, setCritiqueError] = useState<string | null>(null);
+  // Critique is also keyed so switching clips clears the display
+  // without a synchronous setState in the change-effect.
+  const [critiqueFor, setCritiqueFor] = useState<{
+    id: string;
+    text: string | null;
+    error: string | null;
+  } | null>(null);
 
   // Close on escape.
   useEffect(() => {
@@ -37,12 +43,10 @@ export function ClipDetailSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [clip, onClose]);
 
-  // Sign the video URL.
+  // Sign the video URL. Stored under the current clip id so stale
+  // fetches that resolve after the user switches clips won't render.
   useEffect(() => {
-    if (!clip || clip.status !== "complete" || clip.id.startsWith("pending-")) {
-      setVideoUrl(null);
-      return;
-    }
+    if (!clip || clip.status !== "complete" || clip.id.startsWith("pending-")) return;
     let cancelled = false;
     (async () => {
       try {
@@ -51,7 +55,9 @@ export function ClipDetailSheet({
         });
         if (!res.ok) return;
         const body = (await res.json()) as { url?: string };
-        if (!cancelled && body.url) setVideoUrl(body.url);
+        if (!cancelled && body.url) {
+          setVideoSigned({ id: clip.id, url: body.url });
+        }
       } catch {
         /* ignore */
       }
@@ -61,11 +67,14 @@ export function ClipDetailSheet({
     };
   }, [clip]);
 
-  // Reset critique state on clip change
-  useEffect(() => {
-    setCritique(null);
-    setCritiqueError(null);
-  }, [clip?.id]);
+  const videoUrl =
+    videoSigned && clip && videoSigned.id === clip.id ? videoSigned.url : null;
+
+  // Derive critique display from the keyed state — no reset effect needed.
+  const critique =
+    critiqueFor && clip && critiqueFor.id === clip.id ? critiqueFor.text : null;
+  const critiqueError =
+    critiqueFor && clip && critiqueFor.id === clip.id ? critiqueFor.error : null;
 
   // Extract + upload frames the first time a completed clip is opened.
   useFrameExtraction({
@@ -87,18 +96,22 @@ export function ClipDetailSheet({
 
   const consultChorus = useCallback(async () => {
     if (!clip || clip.status !== "complete") return;
+    const targetId = clip.id;
     setCritiquing(true);
-    setCritique(null);
-    setCritiqueError(null);
+    setCritiqueFor({ id: targetId, text: null, error: null });
     try {
-      const res = await fetch(`/api/clips/${clip.id}/critique`, {
+      const res = await fetch(`/api/clips/${targetId}/critique`, {
         method: "POST",
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? res.statusText);
-      setCritique(body.critique as string);
+      setCritiqueFor({ id: targetId, text: body.critique as string, error: null });
     } catch (err) {
-      setCritiqueError(err instanceof Error ? err.message : String(err));
+      setCritiqueFor({
+        id: targetId,
+        text: null,
+        error: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setCritiquing(false);
     }

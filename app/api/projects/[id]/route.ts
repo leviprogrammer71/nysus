@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { isAllowedEmail } from "@/lib/auth";
+import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,9 +44,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
+  // Build a narrow update payload — the Supabase type needs a
+  // concrete `Projects.Update` shape, not Record<string, unknown>.
+  const update: {
+    title?: string;
+    description?: string | null;
+    character_sheet?: CharacterSheet;
+    aesthetic_bible?: AestheticBible;
+  } = {};
+  if (body.title !== undefined) update.title = body.title;
+  if (body.description !== undefined) update.description = body.description;
+  if (body.character_sheet !== undefined)
+    update.character_sheet = body.character_sheet as CharacterSheet;
+  if (body.aesthetic_bible !== undefined)
+    update.aesthetic_bible = body.aesthetic_bible as AestheticBible;
+
   const { data, error } = await supabase
     .from("projects")
-    .update(body as Record<string, unknown>)
+    .update(update)
     .eq("id", id)
     .select("id")
     .single();

@@ -40,7 +40,9 @@ export function Workspace({
   const [genError, setGenError] = useState<string | null>(null);
 
   const clipsRef = useRef(clips);
-  clipsRef.current = clips;
+  useEffect(() => {
+    clipsRef.current = clips;
+  }, [clips]);
 
   const upsertClip = useCallback((clip: TimelineClip) => {
     setClips((prev) => {
@@ -113,15 +115,17 @@ export function Workspace({
         // Replace optimistic with the real row id.
         setClips((prev) => {
           const next = prev.filter((c) => c.id !== optimistic.id);
-          return [
-            ...next,
-            {
-              ...optimistic,
-              id: body.clip_id as string,
-              replicate_prediction_id: body.prediction_id as string,
-              status: body.status === "starting" ? "queued" : "processing",
-            },
-          ].sort((a, b) => a.order_index - b.order_index);
+          const status: TimelineClip["status"] =
+            body.status === "starting" ? "queued" : "processing";
+          const replacement: TimelineClip = {
+            ...optimistic,
+            id: body.clip_id as string,
+            replicate_prediction_id: body.prediction_id as string,
+            status,
+          };
+          return [...next, replacement].sort(
+            (a, b) => a.order_index - b.order_index,
+          );
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

@@ -19,14 +19,17 @@ export function ClipCard({
   index: number;
   onOpen: () => void;
 }) {
-  // Fetch a signed URL for the last-frame thumbnail when a clip completes.
-  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+  // Thumbnail is keyed by clip id + status so stale entries from prior
+  // clips never render even if the fetch resolves late. Avoids having
+  // to null-out state synchronously inside the effect.
+  const [thumb, setThumb] = useState<
+    { id: string; status: TimelineClip["status"]; url: string } | null
+  >(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setThumbUrl(null);
     if (clip.status !== "complete") return;
     if (clip.id.startsWith("pending-")) return;
+    let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/clips/${clip.id}/signed-url?kind=last_frame`, {
@@ -34,7 +37,9 @@ export function ClipCard({
         });
         if (!res.ok) return;
         const body = (await res.json()) as { url?: string };
-        if (!cancelled && body.url) setThumbUrl(body.url);
+        if (!cancelled && body.url) {
+          setThumb({ id: clip.id, status: clip.status, url: body.url });
+        }
       } catch {
         // no-op; the card falls back to the shot-number badge
       }
@@ -43,6 +48,9 @@ export function ClipCard({
       cancelled = true;
     };
   }, [clip.id, clip.status]);
+
+  const thumbUrl =
+    thumb && thumb.id === clip.id && clip.status === "complete" ? thumb.url : null;
 
   const shotNumber = clip.shot_metadata?.shot_number ?? index + 1;
   const isPending = clip.id.startsWith("pending-");

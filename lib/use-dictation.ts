@@ -55,7 +55,9 @@ export function useDictation({
   silenceMs?: number;
   lang?: string;
 }) {
-  const [supported, setSupported] = useState(false);
+  // Lazy initializer probes the browser once — avoids setState-in-effect.
+  // Returns false during SSR (no window) and the correct answer on hydrate.
+  const [supported] = useState(() => Boolean(getCtor()));
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -63,10 +65,6 @@ export function useDictation({
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finalBufferRef = useRef<string>("");
-
-  useEffect(() => {
-    setSupported(Boolean(getCtor()));
-  }, []);
 
   const stop = useCallback(() => {
     if (silenceTimerRef.current) {
