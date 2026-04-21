@@ -60,3 +60,9 @@ next-env.d.ts
 
 # orphan install dirs left behind by fuse mount quirks
 .node_modules_partial_*
+
+# editor / agent state
+.claude/
+
+# leftover type-probe file that the sandbox fuse mount wouldn't let delete
+lib/type-probe.ts
