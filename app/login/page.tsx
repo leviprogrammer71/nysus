@@ -1,4 +1,5 @@
 import { LoginForm } from "./login-form";
+import { Logomark } from "@/app/components/logomark";
 
 export const metadata = {
   title: "Sign in · Nysus",
@@ -9,12 +10,7 @@ export default function LoginPage() {
     <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
       <div className="w-full max-w-md flex flex-col items-center gap-8">
         <header className="flex flex-col items-center gap-3 text-center">
-          <div
-            aria-hidden
-            className="w-12 h-12 rounded-full border border-ink/60 flex items-center justify-center font-display text-2xl text-ink"
-          >
-            N
-          </div>
+          <Logomark size={96} priority className="animate-paper-breath" />
           <h1 className="font-display text-4xl tracking-[0.2em] text-ink">
             NYSUS
           </h1>

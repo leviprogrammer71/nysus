@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ClipCard } from "./clip-card";
 import type { TimelineClip } from "./types";
 
@@ -12,9 +13,20 @@ export function Timeline({
 }) {
   if (clips.length === 0) {
     return (
-      <div className="bg-paper-deep px-6 py-8 flex items-center justify-center text-center">
-        <p className="font-hand text-base text-ink-soft/70 max-w-sm">
-          clips will appear here as you generate them
+      <div className="bg-paper-deep px-6 py-6 flex flex-col sm:flex-row items-center justify-center gap-5 text-center sm:text-left">
+        <div className="relative w-44 sm:w-56 animate-paper-drift shrink-0">
+          <Image
+            src="/illustrations/film-strips.png"
+            alt="Film strips waiting to be cut"
+            width={560}
+            height={373}
+            className="w-full h-auto mix-blend-multiply"
+            sizes="(max-width: 640px) 44vw, 224px"
+          />
+        </div>
+        <p className="font-hand text-base text-ink-soft/80 max-w-xs">
+          clips will appear here as you generate them. ask the director for a
+          shot to begin.
         </p>
       </div>
     );

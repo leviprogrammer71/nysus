@@ -1,4 +1,5 @@
 import { envStatus } from "@/lib/env";
+import { Logomark } from "@/app/components/logomark";
 
 export const metadata = {
   title: "Setup · Nysus",
@@ -25,12 +26,7 @@ export default function SetupPage() {
   return (
     <main className="min-h-screen flex flex-col px-6 py-10 max-w-2xl mx-auto w-full">
       <header className="flex flex-col items-center gap-3 text-center mb-10">
-        <div
-          aria-hidden
-          className="w-12 h-12 rounded-full border border-ink/60 flex items-center justify-center font-display text-2xl text-ink"
-        >
-          N
-        </div>
+        <Logomark size={80} priority className="animate-paper-breath" />
         <h1 className="font-display text-4xl tracking-[0.2em] text-ink">
           NYSUS
         </h1>

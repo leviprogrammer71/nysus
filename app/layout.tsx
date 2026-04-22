@@ -31,8 +31,13 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nysus",
-  description: "A filmmaker's notebook for chained AI video.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  title: {
+    default: "Nysus",
+    template: "%s · Nysus",
+  },
+  description:
+    "A filmmaker's notebook for chained AI video generation. Named after Dionysus — patron of theater, ecstatic vision, and the dissolving of boundaries.",
   applicationName: "Nysus",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -43,6 +48,28 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Nysus",
+  },
+  openGraph: {
+    type: "website",
+    title: "Nysus — a filmmaker's notebook",
+    description:
+      "Chained AI video generation, directed by conversation. Clip by clip, frame by frame — each shot seeds the next.",
+    siteName: "Nysus",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Nysus — a filmmaker's notebook",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Nysus — a filmmaker's notebook",
+    description:
+      "Chained AI video generation, directed by conversation.",
+    images: ["/og-image.png"],
   },
 };
 

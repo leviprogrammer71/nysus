@@ -183,10 +183,17 @@ export function ClipDetailSheet({
               className="w-full bg-black aspect-[9/16] max-h-[60vh] object-contain"
             />
           ) : clip.status === "processing" || clip.status === "queued" ? (
-            <div className="w-full aspect-[9/16] max-h-[60vh] bg-paper-deep flex flex-col items-center justify-center gap-3">
-              <div className="w-10 h-10 border-2 border-ink/40 border-t-transparent rounded-full animate-spin" />
+            <div className="w-full aspect-[9/16] max-h-[60vh] bg-paper-deep flex flex-col items-center justify-center gap-4 px-6">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/illustrations/search-reel.png"
+                alt=""
+                className="w-40 h-auto mix-blend-multiply animate-paper-breath"
+              />
               <p className="font-hand text-lg text-sepia-deep">
-                {clip.status === "queued" ? "queued" : "rendering…"}
+                {clip.status === "queued"
+                  ? "queued · examining the reel"
+                  : "rendering · examining the reel…"}
               </p>
             </div>
           ) : clip.status === "failed" ? (

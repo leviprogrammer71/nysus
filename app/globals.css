@@ -154,3 +154,43 @@ body {
   opacity: 0.15;
   margin: 1em 0;
 }
+
+/*
+  Illustration animations — subtle, never distracting. The Director's
+  Desk is meant to feel like paper, not a live app; restraint here is
+  the whole point.
+*/
+
+@keyframes paper-float {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+@keyframes paper-breath {
+  0%   { opacity: 0.88; }
+  50%  { opacity: 1;    }
+  100% { opacity: 0.88; }
+}
+@keyframes paper-drift {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translate(-2px, -3px) rotate(-0.3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.animate-paper-float {
+  animation: paper-float 6s ease-in-out infinite;
+}
+.animate-paper-breath {
+  animation: paper-breath 5s ease-in-out infinite;
+}
+.animate-paper-drift {
+  animation: paper-drift 8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-paper-float,
+  .animate-paper-breath,
+  .animate-paper-drift {
+    animation: none;
+  }
+}

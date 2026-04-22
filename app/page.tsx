@@ -1,6 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { deleteProject } from "./actions";
+import { Logomark } from "./components/logomark";
 
 // Home = projects list. Middleware guarantees `user` is present by
 // the time we get here.
@@ -35,12 +37,7 @@ export default async function HomePage() {
           className="flex items-center gap-3"
           aria-label="Nysus home"
         >
-          <span
-            aria-hidden
-            className="w-9 h-9 rounded-full border border-ink/60 flex items-center justify-center font-display text-lg text-ink"
-          >
-            N
-          </span>
+          <Logomark size={36} />
           <span className="font-display text-2xl tracking-[0.2em] text-ink">
             NYSUS
           </span>
@@ -103,12 +100,17 @@ export default async function HomePage() {
           ))}
         </ul>
       ) : (
-        <div className="flex flex-col items-center text-center gap-6 py-16">
-          <div
-            aria-hidden
-            className="w-24 h-24 rounded-full border border-ink/30 flex items-center justify-center font-display text-4xl text-ink-soft/60"
-          >
-            ∅
+        <div className="flex flex-col items-center text-center gap-5 py-8">
+          <div className="relative w-full max-w-sm animate-paper-float">
+            <Image
+              src="/illustrations/empty-notebook.png"
+              alt="An open notebook waiting to be filled"
+              width={600}
+              height={400}
+              priority
+              sizes="(max-width: 480px) 90vw, 400px"
+              className="w-full h-auto mix-blend-multiply"
+            />
           </div>
           <p className="font-hand text-2xl text-ink-soft">
             the notebook is empty

@@ -19,6 +19,10 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Track whether the current draft contains any voice-dictated text
+  // so the dictation hint rides along when the user hits Send. Reset
+  // whenever the draft goes empty (fresh type).
+  const [inputVoiceTouched, setInputVoiceTouched] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -27,6 +31,7 @@ export function ChatPanel({
   const dictation = useDictation({
     onFinal: (text) => {
       setInput((prev) => (prev ? `${prev.trimEnd()} ${text}` : text));
+      setInputVoiceTouched(true);
     },
   });
 
@@ -143,9 +148,11 @@ export function ChatPanel({
 
   const send = useCallback(async () => {
     const text = input;
+    const opts = inputVoiceTouched ? { source: "voice" as const } : undefined;
     setInput("");
-    await sendText(text);
-  }, [input, sendText]);
+    setInputVoiceTouched(false);
+    await sendText(text, opts);
+  }, [input, inputVoiceTouched, sendText]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -263,7 +270,15 @@ export function ChatPanel({
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setInput(next);
+              // If the draft is fully cleared, drop the voice flag so
+              // subsequent typed-only messages don't carry the hint.
+              if (next.length === 0 && inputVoiceTouched) {
+                setInputVoiceTouched(false);
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="say it to the director…"
             rows={1}

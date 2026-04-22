@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
 import type { TimelineClip } from "../timeline/types";
 
@@ -86,10 +87,21 @@ export function StitchView({
   return (
     <div className="space-y-8">
       {ready.length === 0 ? (
-        <div className="bg-paper-deep px-6 py-10 text-center">
-          <p className="font-hand text-2xl text-ink-soft mb-2">nothing to stitch</p>
-          <p className="font-body text-sm text-ink-soft max-w-md mx-auto">
-            Generate at least one clip in this project first.
+        <div className="bg-paper-deep px-6 py-10 flex flex-col items-center gap-4 text-center">
+          <div className="relative w-full max-w-sm animate-paper-drift">
+            <Image
+              src="/illustrations/scattered-strips.png"
+              alt="Film strips scattered on the desk, waiting for a cut"
+              width={600}
+              height={400}
+              className="w-full h-auto mix-blend-multiply"
+              sizes="(max-width: 480px) 90vw, 400px"
+            />
+          </div>
+          <p className="font-hand text-2xl text-ink-soft">nothing to stitch</p>
+          <p className="font-body text-sm text-ink-soft max-w-md">
+            Generate at least one clip in this project, then come back to
+            arrange and export.
           </p>
         </div>
       ) : (
