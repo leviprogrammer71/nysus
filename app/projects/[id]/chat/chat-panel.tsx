@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MessageBubble, type ChatMessage } from "./message";
 import type { ShotPrompt } from "@/lib/shot-prompt";
 import { useDictation } from "@/lib/use-dictation";
@@ -39,6 +40,8 @@ export function ChatPanel({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const router = useRouter();
 
   const dictation = useDictation({
     onFinal: (text) => {
@@ -277,8 +280,12 @@ export function ChatPanel({
       );
       setStreaming(false);
       abortRef.current = null;
+      // Refresh server-rendered project state — if the director used a
+      // tool, the sheet/bible/title in the surrounding page should
+      // update without a manual reload.
+      router.refresh();
     }
-  }, [streaming, projectId, attachments]);
+  }, [streaming, projectId, attachments, router]);
 
   const send = useCallback(async () => {
     const text = input;
@@ -312,15 +319,24 @@ export function ChatPanel({
             <MessageBubble key={m.id} message={m} onGenerate={onGenerate} />
           ))
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center gap-4 px-4">
-            <p className="font-hand text-2xl text-ink-soft">
-              the notebook is open
-            </p>
-            <p className="font-body text-sm text-ink-soft max-w-sm leading-relaxed">
-              Talk to the director. Describe a scene, paste a script, or ask
-              for a shot. When a shot prompt appears, it&rsquo;ll show up as an
-              inline card ready to generate.
-            </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 font-hand text-sepia-deep text-base">
+              <span>the director</span>
+            </div>
+            <div className="font-body text-ink space-y-3 leading-relaxed">
+              <p>
+                Tell me the story &mdash; a sentence is enough. I can draft the
+                cast, the aesthetic bible, and the opening shot from that.
+              </p>
+              <p>
+                If you&rsquo;d rather do the specifics yourself, the{" "}
+                <span className="font-hand text-sepia-deep">edit</span> page is
+                up top. Either way, this chat is where everything happens.
+              </p>
+              <p className="font-hand text-ink-soft">
+                what are we making?
+              </p>
+            </div>
           </div>
         )}
 

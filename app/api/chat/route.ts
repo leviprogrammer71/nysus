@@ -7,33 +7,29 @@ import {
   streamChatCompletion,
   parseOpenRouterStream,
   type OpenRouterMessage,
+  type OpenRouterToolCall,
 } from "@/lib/openrouter";
 import {
   DIRECTOR_SYSTEM_PROMPT,
   buildProjectContextSuffix,
 } from "@/lib/prompts/director";
+import { DIRECTOR_TOOLS, executeDirectorTool } from "@/lib/director-tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const bodySchema = z.object({
   project_id: z.string().uuid(),
   message: z.string().trim().min(1).max(8000),
-  /**
-   * Signed image URLs from /api/chat/attach — passed through to the
-   * OpenRouter vision content block and persisted on the user
-   * message's attached_frame_urls column.
-   */
   attached_image_urls: z.array(z.string().url()).max(8).optional(),
 });
 
-// How many of the most-recent prior messages to send to Claude. Keep
-// this bounded so a long session doesn't blow up the context window;
-// Phase 6+ may introduce summarization.
 const HISTORY_LIMIT = 40;
+/** Cap on how many tool-call rounds per user turn. Defensive. */
+const MAX_TOOL_ROUNDS = 5;
 
 export async function POST(request: NextRequest) {
-  // --- Auth gate (belt + suspenders on top of middleware) ------------
   const supabase = await createClient();
   const {
     data: { user },
@@ -42,7 +38,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 
-  // --- Parse payload -------------------------------------------------
   let body: z.infer<typeof bodySchema>;
   try {
     body = bodySchema.parse(await request.json());
@@ -53,13 +48,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // --- Load project (RLS enforces ownership) -------------------------
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, title, character_sheet, aesthetic_bible")
     .eq("id", body.project_id)
     .maybeSingle();
-
   if (projectError) {
     return NextResponse.json({ error: projectError.message }, { status: 500 });
   }
@@ -67,7 +60,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  // --- Load recent history -------------------------------------------
   const { data: priorMessages, error: messagesError } = await supabase
     .from("messages")
     .select("role, content")
@@ -79,7 +71,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: messagesError.message }, { status: 500 });
   }
 
-  // --- Budget + rate-limit gate --------------------------------------
   const admin = createServiceRoleClient();
   const gate = await gateChat(admin);
   if (!gate.ok) {
@@ -89,7 +80,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // --- Persist user message before we call Claude --------------------
   const attachedImageUrls = body.attached_image_urls ?? [];
   const { data: userMessageRow, error: insertUserError } = await supabase
     .from("messages")
@@ -109,27 +99,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // --- Build OpenRouter payload --------------------------------------
-  const projectContextSuffix = buildProjectContextSuffix({
-    title: project.title,
-    character_sheet: project.character_sheet,
-    aesthetic_bible: project.aesthetic_bible,
-  });
+  // Re-read the project's sheet/bible fresh on each turn so tool
+  // edits inside a single user turn are reflected in the context.
+  async function freshProjectContext() {
+    const { data } = await admin
+      .from("projects")
+      .select("title, character_sheet, aesthetic_bible")
+      .eq("id", project!.id)
+      .single();
+    return buildProjectContextSuffix({
+      title: data?.title ?? project!.title,
+      character_sheet: data?.character_sheet ?? project!.character_sheet,
+      aesthetic_bible: data?.aesthetic_bible ?? project!.aesthetic_bible,
+    });
+  }
 
-  // The brief mandates: PROJECT CONTEXT appears at the bottom of every
-  // user message. We store raw user text in the DB and inject fresh
-  // context on every send, so updates to the character sheet or
-  // aesthetic bible propagate to the full transcript immediately.
-  //
-  // If the current turn has attached images, send as a multimodal
-  // content array with text + image_url parts so Claude's vision sees
-  // them. Historical messages stay text-only (cheap on tokens).
-  const currentUserContent =
+  const initialContextSuffix = await freshProjectContext();
+
+  const currentUserContent: OpenRouterMessage =
     attachedImageUrls.length > 0
       ? {
-          role: "user" as const,
+          role: "user",
           content: [
-            { type: "text" as const, text: `${body.message}\n${projectContextSuffix}` },
+            { type: "text", text: `${body.message}\n${initialContextSuffix}` },
             ...attachedImageUrls.map((url) => ({
               type: "image_url" as const,
               image_url: { url },
@@ -137,83 +129,153 @@ export async function POST(request: NextRequest) {
           ],
         }
       : {
-          role: "user" as const,
-          content: `${body.message}\n${projectContextSuffix}`,
+          role: "user",
+          content: `${body.message}\n${initialContextSuffix}`,
         };
 
-  const messages: OpenRouterMessage[] = [
+  const baseHistory: OpenRouterMessage[] = [
     { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
     ...(priorMessages ?? [])
       .filter(
         (m): m is { role: "user" | "assistant"; content: string } =>
           m.role === "user" || m.role === "assistant",
       )
-      .map((m) => ({
-        role: m.role,
-        content:
-          m.role === "user" ? `${m.content}\n${projectContextSuffix}` : m.content,
-      })),
+      .map<OpenRouterMessage>((m) =>
+        m.role === "user"
+          ? {
+              role: "user",
+              content: `${m.content}\n${initialContextSuffix}`,
+            }
+          : { role: "assistant", content: m.content },
+      ),
     currentUserContent,
   ];
 
-  // --- Kick off the stream -------------------------------------------
-  let upstream: ReadableStream<Uint8Array>;
-  try {
-    upstream = await streamChatCompletion({ messages });
-  } catch (err) {
-    // Roll back — don't leave an orphan user message with no assistant reply.
-    // (Commented: leaving the user message in place is arguably correct, so
-    // the user can retry without re-typing. Keep it; they'll see the error
-    // in the toast and send again.)
-    const message = err instanceof Error ? err.message : "Upstream error";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  // messages array that accumulates across tool-call rounds
+  const messages: OpenRouterMessage[] = baseHistory.slice();
 
-  // --- Pipe text deltas to the client, accumulate for DB insert ------
   let accumulated = "";
 
   const clientStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
+      const emit = (s: string) => {
+        accumulated += s;
+        controller.enqueue(encoder.encode(s));
+      };
+
       try {
-        for await (const delta of parseOpenRouterStream(upstream)) {
-          accumulated += delta;
-          controller.enqueue(encoder.encode(delta));
+        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          const upstream = await streamChatCompletion({
+            messages,
+            tools: DIRECTOR_TOOLS,
+          });
+
+          let collectedToolCalls: OpenRouterToolCall[] = [];
+          let roundText = "";
+
+          for await (const ev of parseOpenRouterStream(upstream)) {
+            if (ev.type === "text") {
+              roundText += ev.delta;
+              emit(ev.delta);
+            } else if (ev.type === "tool_calls") {
+              collectedToolCalls = ev.calls;
+            } else if (ev.type === "done") {
+              // Exit for-await loop; outer for-loop decides whether
+              // to continue based on tool calls.
+            }
+          }
+
+          if (collectedToolCalls.length === 0) {
+            // Plain completion — done.
+            return;
+          }
+
+          // Append the assistant turn (possibly with text + tool_calls)
+          // to the history.
+          messages.push({
+            role: "assistant",
+            content: roundText.length > 0 ? roundText : null,
+            tool_calls: collectedToolCalls,
+          });
+
+          // Execute each tool and emit tool-event fences so the
+          // client can render the outcome inline.
+          for (const tc of collectedToolCalls) {
+            const result = await executeDirectorTool(
+              tc.function.name,
+              tc.function.arguments,
+              { admin, projectId: project!.id },
+            );
+
+            // Emit the tool-event block for the chat UI.
+            const fence = [
+              "",
+              "```tool-event",
+              JSON.stringify(result.event),
+              "```",
+              "",
+            ].join("\n");
+            emit(fence);
+
+            // Feed the result back to the model so it can continue.
+            messages.push({
+              role: "tool",
+              tool_call_id: tc.id,
+              content: result.result,
+            });
+          }
+
+          // Refresh PROJECT CONTEXT — tools may have changed state.
+          // We replace the last user message's content so the model
+          // sees the new sheet/bible in its next call.
+          const refreshed = await freshProjectContext();
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i];
+            if (m.role === "user") {
+              if (typeof m.content === "string") {
+                m.content = `${body.message}\n${refreshed}`;
+              }
+              break;
+            }
+          }
+          // Loop continues — next iteration sends the updated
+          // messages back and gets the model's follow-up text.
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        controller.enqueue(encoder.encode(`\n\n[stream error: ${msg}]`));
+        emit(`\n\n[stream error: ${msg}]`);
       } finally {
         controller.close();
 
-        // Persist the assistant reply (fire-and-forget; controller
-        // already closed so the client has the text even if this
-        // write fails).
         if (accumulated.trim().length > 0) {
           void supabase
             .from("messages")
             .insert({
-              project_id: project.id,
+              project_id: project!.id,
               role: "assistant",
               content: accumulated,
             })
             .then(({ error }) => {
               if (error) {
-                console.error("Failed to persist assistant message:", error.message);
+                console.error(
+                  "Failed to persist assistant message:",
+                  error.message,
+                );
               }
             });
         }
 
-        // Record the paid turn for budget accounting.
         void recordUsage({
           admin,
           userId: user.id,
-          projectId: project.id,
+          projectId: project!.id,
           provider: "openrouter",
           action: "chat",
           metadata: {
             has_attachments: attachedImageUrls.length > 0,
             attachment_count: attachedImageUrls.length,
+            tool_loop: true,
           },
         });
       }
@@ -225,7 +287,7 @@ export async function POST(request: NextRequest) {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no", // defeat proxy buffering
+      "X-Accel-Buffering": "no",
       "X-User-Message-Id": userMessageRow.id,
     },
   });

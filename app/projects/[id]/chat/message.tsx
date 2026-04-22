@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { shotPromptSchema, type ShotPrompt } from "@/lib/shot-prompt";
 import { ShotCard } from "./shot-card";
+import { ToolEventCard } from "./tool-event-card";
 
 export type ChatMessage = {
   id: string;
@@ -13,28 +14,57 @@ export type ChatMessage = {
   streaming?: boolean;
 };
 
-// Split a message into text segments and shot cards so shots render
-// as proper components instead of raw JSON code blocks.
-function splitAssistantContent(
-  content: string,
-): Array<{ type: "text"; text: string } | { type: "shot"; shot: ShotPrompt }> {
-  const fence = /```json-shot\s*\n([\s\S]*?)\n```/g;
-  const out: Array<
-    { type: "text"; text: string } | { type: "shot"; shot: ShotPrompt }
-  > = [];
+type ToolEvent = {
+  name: string;
+  summary: string;
+  detail?: string;
+};
+
+type AssistantSegment =
+  | { type: "text"; text: string }
+  | { type: "shot"; shot: ShotPrompt }
+  | { type: "tool"; event: ToolEvent };
+
+// Split a message into text + shot cards + tool-event cards. We match
+// both fence kinds in one pass so they render in the order the director
+// wrote them.
+function splitAssistantContent(content: string): AssistantSegment[] {
+  const fence = /```(json-shot|tool-event)\s*\n([\s\S]*?)\n```/g;
+  const out: AssistantSegment[] = [];
   let lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = fence.exec(content)) !== null) {
     if (m.index > lastIndex) {
       out.push({ type: "text", text: content.slice(lastIndex, m.index) });
     }
-    try {
-      const parsed = shotPromptSchema.parse(JSON.parse(m[1]));
-      out.push({ type: "shot", shot: parsed });
-    } catch {
-      // Malformed shot block — render the raw fenced block as text so
-      // the user can see what went wrong.
-      out.push({ type: "text", text: m[0] });
+    const kind = m[1];
+    const raw = m[2];
+    if (kind === "json-shot") {
+      try {
+        const parsed = shotPromptSchema.parse(JSON.parse(raw));
+        out.push({ type: "shot", shot: parsed });
+      } catch {
+        out.push({ type: "text", text: m[0] });
+      }
+    } else {
+      // tool-event
+      try {
+        const ev = JSON.parse(raw) as Partial<ToolEvent>;
+        if (typeof ev.name === "string" && typeof ev.summary === "string") {
+          out.push({
+            type: "tool",
+            event: {
+              name: ev.name,
+              summary: ev.summary,
+              detail: typeof ev.detail === "string" ? ev.detail : undefined,
+            },
+          });
+        } else {
+          out.push({ type: "text", text: m[0] });
+        }
+      } catch {
+        out.push({ type: "text", text: m[0] });
+      }
     }
     lastIndex = fence.lastIndex;
   }
@@ -76,17 +106,27 @@ export function MessageBubble({
           ) : null}
         </div>
         <div className="font-body text-ink space-y-3 leading-relaxed">
-          {segments.map((seg, i) =>
-            seg.type === "shot" ? (
-              <ShotCard key={`shot-${i}`} shot={seg.shot} onGenerate={onGenerate} />
-            ) : (
+          {segments.map((seg, i) => {
+            if (seg.type === "shot") {
+              return (
+                <ShotCard
+                  key={`shot-${i}`}
+                  shot={seg.shot}
+                  onGenerate={onGenerate}
+                />
+              );
+            }
+            if (seg.type === "tool") {
+              return <ToolEventCard key={`tool-${i}`} event={seg.event} />;
+            }
+            return (
               <div key={`text-${i}`} className="prose-nysus">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {seg.text}
                 </ReactMarkdown>
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
       </div>
     </div>
