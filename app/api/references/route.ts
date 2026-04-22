@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import { removeRefPath } from "@/lib/references";
 import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
@@ -27,7 +27,7 @@ export async function DELETE(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isAllowedEmail(user.email)) {
+  if (!isAuthenticated(user)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 

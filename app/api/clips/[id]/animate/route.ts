@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { createPrediction } from "@/lib/replicate";
 import { buildSeedanceInput, SEEDANCE_MODEL } from "@/lib/seedance";
+import { buildKlingInput, KLING_MODEL } from "@/lib/kling";
 import { shotPromptSchema } from "@/lib/shot-prompt";
 import { gateGeneration, recordUsage } from "@/lib/budget";
+import type { AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,15 +17,10 @@ type Params = { params: Promise<{ id: string }> };
 /**
  * POST /api/clips/[id]/animate
  *
- * Kicks off Seedance for an existing clip — the typical path after
- * /api/stills/generate has produced the seed image for the scene.
- * Uses the clip's own still_image_url (auto-set as seed_image_url
- * by the stills endpoint) so every scene animates from its own
- * generated still. One clip row per scene, always.
- *
- * If the clip has already been animated and is in flight, this is a
- * no-op that returns the existing state. If it's failed or complete,
- * it clears and starts a fresh prediction.
+ * Routes to Seedance or Kling based on shot_metadata.animation_model
+ * (and a hard guardrail: realistic projects are always Seedance).
+ * Uses the clip's own still as the seed so each scene animates from
+ * its generated frame (OpenAI gpt-image-1 or Flux).
  */
 export async function POST(_req: NextRequest, { params }: Params) {
   const { id } = await params;
@@ -32,7 +29,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isAllowedEmail(user.email)) {
+  if (!isAuthenticated(user)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 
@@ -48,7 +45,6 @@ export async function POST(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Clip not found" }, { status: 404 });
   }
 
-  // If the video is already in flight, don't double-dispatch.
   if (
     (clip.status === "queued" || clip.status === "processing") &&
     clip.replicate_prediction_id
@@ -63,7 +59,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
 
   const admin = createServiceRoleClient();
-  const gate = await gateGeneration(admin);
+  const gate = await gateGeneration({
+    admin,
+    userId: user.id,
+    email: user.email,
+  });
   if (!gate.ok) {
     return NextResponse.json(
       { error: gate.reason, code: gate.code },
@@ -71,9 +71,6 @@ export async function POST(_req: NextRequest, { params }: Params) {
     );
   }
 
-  // Build the shot packet we need for Seedance from what's stored on
-  // the clip. shot_metadata was persisted at creation time; we rehydrate
-  // the strict schema so Seedance gets proper defaults.
   const shotMeta = clip.shot_metadata ?? {
     shot_type: "shot_prompt" as const,
     shot_number: clip.order_index + 1,
@@ -82,32 +79,54 @@ export async function POST(_req: NextRequest, { params }: Params) {
     voice_direction: "",
     suggested_seed_behavior: "auto" as const,
   };
+  const shot = shotPromptSchema.parse({ ...shotMeta, prompt: clip.prompt });
 
-  const shot = shotPromptSchema.parse({
-    ...shotMeta,
-    prompt: clip.prompt,
-  });
+  // --- Model routing -------------------------------------------------
+  // Hard rule: realistic projects ALWAYS use Seedance 2.0. Kling only
+  // fires for stylized / 3D aesthetics.
+  const { data: project } = await admin
+    .from("projects")
+    .select("aesthetic_bible")
+    .eq("id", clip.project_id)
+    .single();
+  const bible = (project?.aesthetic_bible ?? {}) as AestheticBible;
+  const styleText = [bible.visual_style ?? "", bible.palette ?? ""]
+    .join(" ")
+    .toLowerCase();
+  const looksRealistic =
+    /realis|photoreal|cinematic\s+35mm|documentar|naturalism/i.test(styleText);
 
-  // Always prefer the clip's own still — that's what makes each scene
-  // self-contained and consistent with its generated image.
+  const requested = shot.animation_model ?? "seedance";
+  const model: "seedance" | "kling" = looksRealistic ? "seedance" : requested;
+
   const seedUrl = clip.still_image_url ?? clip.seed_image_url;
-
-  const input = buildSeedanceInput({
-    shot,
-    seedImageUrl: seedUrl,
-  });
 
   const webhookUrl =
     `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/replicate/webhook` +
     `?clip_id=${clip.id}&secret=${encodeURIComponent(env.CRON_SECRET)}`;
 
   try {
-    const prediction = await createPrediction({
-      model: SEEDANCE_MODEL,
-      input,
-      webhook: webhookUrl,
-      webhook_events_filter: ["completed"],
-    });
+    let prediction;
+    let modelSlug: string;
+    if (model === "kling") {
+      modelSlug = KLING_MODEL;
+      const input = buildKlingInput({ shot, seedImageUrl: seedUrl });
+      prediction = await createPrediction({
+        model: modelSlug,
+        input,
+        webhook: webhookUrl,
+        webhook_events_filter: ["completed"],
+      });
+    } else {
+      modelSlug = SEEDANCE_MODEL;
+      const input = buildSeedanceInput({ shot, seedImageUrl: seedUrl });
+      prediction = await createPrediction({
+        model: modelSlug,
+        input,
+        webhook: webhookUrl,
+        webhook_events_filter: ["completed"],
+      });
+    }
 
     const { data: updated } = await admin
       .from("clips")
@@ -134,8 +153,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
       metadata: {
         clip_id: clip.id,
         prediction_id: prediction.id,
-        model: SEEDANCE_MODEL,
+        model: modelSlug,
+        animation_model: model,
         animated_from_still: Boolean(clip.still_image_url),
+        forced_realistic: looksRealistic && requested !== "seedance",
       },
     });
 
@@ -144,6 +165,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
       clip: updated,
       prediction_id: prediction.id,
       status: prediction.status,
+      model,
+      model_slug: modelSlug,
+      forced_realistic: looksRealistic && requested !== "seedance",
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

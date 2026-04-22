@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { isPremiumEmail } from "@/lib/auth";
 
 type SB = SupabaseClient<Database>;
 
@@ -33,13 +34,23 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function budgetCaps() {
+/**
+ * Budget caps for a given user. Premium emails (ALLOWED_EMAIL +
+ * anything in PREMIUM_EMAILS) get the bumped set. Non-premium users
+ * run on the standard per-user allowance.
+ */
+export function budgetCaps(email?: string | null) {
+  const premium = isPremiumEmail(email);
+  const mult = premium ? 10 : 1;
+  const concMult = premium ? 2 : 1;
+  const hourlyMult = premium ? 3 : 1;
   return {
-    maxDailyCents:   envNumber("MAX_DAILY_USD", 10)  * 100,  // $10/day default
-    maxMonthlyCents: envNumber("MAX_MONTHLY_USD", 50) * 100, // $50/mo default
-    maxConcurrent:   envNumber("MAX_CONCURRENT_GENERATIONS", 3),
-    maxGenPerHour:   envNumber("MAX_GENERATIONS_PER_HOUR", 20),
-    maxChatPerHour:  envNumber("MAX_CHAT_PER_HOUR", 60),
+    premium,
+    maxDailyCents:   envNumber("MAX_DAILY_USD", 10)  * 100 * mult,
+    maxMonthlyCents: envNumber("MAX_MONTHLY_USD", 50) * 100 * mult,
+    maxConcurrent:   envNumber("MAX_CONCURRENT_GENERATIONS", 3) * concMult,
+    maxGenPerHour:   envNumber("MAX_GENERATIONS_PER_HOUR", 20) * hourlyMult,
+    maxChatPerHour:  envNumber("MAX_CHAT_PER_HOUR", 60) * hourlyMult,
   };
 }
 
@@ -50,24 +61,37 @@ export type BudgetCheckResult =
   | { ok: false; reason: string; code: "daily_cap" | "monthly_cap" | "rate_limit" | "concurrent_cap" };
 
 /**
- * Check daily + monthly spend against caps. Returns ok:true if spend
- * is within budget for a new action of the given estimated cost.
+ * Check daily + monthly spend against caps for a specific user.
+ * Returns ok:true if spend is within budget for a new action of the
+ * given estimated cost.
  */
 export async function checkSpendCap({
   admin,
   estimateCents,
+  userId,
+  email,
 }: {
   admin: SB;
   estimateCents: number;
+  userId: string;
+  email?: string | null;
 }): Promise<BudgetCheckResult> {
-  const caps = budgetCaps();
+  const caps = budgetCaps(email);
   const now = new Date();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
   const [daily, monthly] = await Promise.all([
-    admin.from("usage").select("cost_usd_cents").gte("created_at", dayStart.toISOString()),
-    admin.from("usage").select("cost_usd_cents").gte("created_at", monthStart.toISOString()),
+    admin
+      .from("usage")
+      .select("cost_usd_cents")
+      .eq("user_id", userId)
+      .gte("created_at", dayStart.toISOString()),
+    admin
+      .from("usage")
+      .select("cost_usd_cents")
+      .eq("user_id", userId)
+      .gte("created_at", monthStart.toISOString()),
   ]);
 
   const sum = (rows: { cost_usd_cents: number }[] | null | undefined) =>
@@ -105,15 +129,18 @@ export async function checkRateLimit({
   admin,
   actions,
   maxPerHour,
+  userId,
 }: {
   admin: SB;
   actions: Array<"generate" | "regenerate" | "chat" | "critique">;
   maxPerHour: number;
+  userId: string;
 }): Promise<BudgetCheckResult> {
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { count, error } = await admin
     .from("usage")
     .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
     .in("action", actions)
     .gte("created_at", hourAgo);
 
@@ -148,15 +175,30 @@ const STALE_THRESHOLD_MS = 10 * 60 * 1000;
 
 export async function checkConcurrentGenerations({
   admin,
+  userId,
+  email,
 }: {
   admin: SB;
+  userId: string;
+  email?: string | null;
 }): Promise<BudgetCheckResult> {
-  const caps = budgetCaps();
+  const caps = budgetCaps(email);
   const cutoff = new Date(Date.now() - STALE_THRESHOLD_MS).toISOString();
+
+  // Concurrent is measured across projects the user owns — via a
+  // project_id subquery would be ideal, but for single-user-per-app
+  // pragmatism we instead fetch user's project ids first and filter.
+  const { data: projectRows } = await admin
+    .from("projects")
+    .select("id")
+    .eq("user_id", userId);
+  const projectIds = (projectRows ?? []).map((p) => p.id);
+  if (projectIds.length === 0) return { ok: true };
 
   const { count, error } = await admin
     .from("clips")
     .select("*", { count: "exact", head: true })
+    .in("project_id", projectIds)
     .in("status", ["queued", "processing"])
     .not("replicate_prediction_id", "is", null)
     .gte("created_at", cutoff);
@@ -183,7 +225,7 @@ export interface RecordUsageArgs {
   admin: SB;
   userId: string;
   projectId: string | null;
-  provider: "replicate" | "openrouter";
+  provider: "replicate" | "openrouter" | "openai";
   action: "generate" | "regenerate" | "chat" | "critique";
   costCents?: number;
   tokensIn?: number;
@@ -232,33 +274,48 @@ export function estimateCost(
 
 // ---------- helper: combined gate used by generation paths ----------
 
-export async function gateGeneration(admin: SB): Promise<BudgetCheckResult> {
-  const concurrent = await checkConcurrentGenerations({ admin });
+type GateArgs = { admin: SB; userId: string; email?: string | null };
+
+export async function gateGeneration(
+  args: GateArgs,
+): Promise<BudgetCheckResult> {
+  const concurrent = await checkConcurrentGenerations(args);
   if (!concurrent.ok) return concurrent;
 
-  const caps = budgetCaps();
+  const caps = budgetCaps(args.email);
   const rate = await checkRateLimit({
-    admin,
+    ...args,
     actions: ["generate", "regenerate"],
     maxPerHour: caps.maxGenPerHour,
   });
   if (!rate.ok) return rate;
 
-  return checkSpendCap({ admin, estimateCents: ESTIMATE_CENTS_PER_GENERATION });
+  return checkSpendCap({
+    ...args,
+    estimateCents: ESTIMATE_CENTS_PER_GENERATION,
+  });
 }
 
-export async function gateChat(admin: SB): Promise<BudgetCheckResult> {
-  const caps = budgetCaps();
+export async function gateChat(args: GateArgs): Promise<BudgetCheckResult> {
+  const caps = budgetCaps(args.email);
   const rate = await checkRateLimit({
-    admin,
+    ...args,
     actions: ["chat"],
     maxPerHour: caps.maxChatPerHour,
   });
   if (!rate.ok) return rate;
 
-  return checkSpendCap({ admin, estimateCents: ESTIMATE_CENTS_PER_CHAT_TURN });
+  return checkSpendCap({
+    ...args,
+    estimateCents: ESTIMATE_CENTS_PER_CHAT_TURN,
+  });
 }
 
-export async function gateCritique(admin: SB): Promise<BudgetCheckResult> {
-  return checkSpendCap({ admin, estimateCents: ESTIMATE_CENTS_PER_CRITIQUE });
+export async function gateCritique(
+  args: GateArgs,
+): Promise<BudgetCheckResult> {
+  return checkSpendCap({
+    ...args,
+    estimateCents: ESTIMATE_CENTS_PER_CRITIQUE,
+  });
 }

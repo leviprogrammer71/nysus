@@ -17,7 +17,10 @@ import { useCallback } from "react";
  * intelligent same-page scroll-to-id).
  */
 
+// Bottom nav is an authenticated-app affordance; hide on the public
+// landing and any pre-auth page.
 const HIDDEN_PATHS = ["/login", "/setup", "/auth"];
+const HIDDEN_EXACT = new Set<string>(["/"]);
 
 type NavItem = {
   key: string;
@@ -96,6 +99,7 @@ export function BottomNav() {
   const pathname = usePathname() ?? "/";
 
   // Hide on auth-wall pages.
+  if (HIDDEN_EXACT.has(pathname)) return null;
   if (HIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return null;
   }

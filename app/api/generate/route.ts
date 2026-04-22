@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { createPrediction } from "@/lib/replicate";
 import { buildSeedanceInput, SEEDANCE_MODEL } from "@/lib/seedance";
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isAllowedEmail(user.email)) {
+  if (!isAuthenticated(user)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   // --- Budget + rate-limit gate --------------------------------------
   const admin = createServiceRoleClient();
-  const gate = await gateGeneration(admin);
+  const gate = await gateGeneration({ admin, userId: user.id, email: user.email });
   if (!gate.ok) {
     return NextResponse.json(
       { error: gate.reason, code: gate.code },
@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
         suggested_seed_behavior: body.shot.suggested_seed_behavior,
         image_prompt: body.shot.image_prompt,
         narration: body.shot.narration,
+        animation_model: body.shot.animation_model,
       },
       seed_image_url: body.seed_image_url ?? null,
       seed_source: body.seed_source,

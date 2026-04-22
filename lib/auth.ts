@@ -1,29 +1,63 @@
 import { env } from "@/lib/env";
 
 /**
- * ALLOWED_EMAIL gate.
+ * Auth helpers for multi-user Nysus.
  *
- * Nysus is single-user. Magic-link auth will still _technically_ allow
- * any Supabase-configured email to sign up, so we enforce the gate at
- * three layers:
- *
- *   1. Login form — refuse to send the magic link for other emails.
- *   2. Auth callback — if an unexpected user shows up at
- *      /auth/callback, immediately sign them out.
- *   3. Middleware — double-check on every request.
- *
- * This is paranoid on purpose. Losing the gate means anyone can
- * provision clips in our Supabase project and burn the Replicate quota.
+ * The app used to gate everything behind a single ALLOWED_EMAIL.
+ * It's now multi-tenant: any signed-in user can create projects.
+ * ALLOWED_EMAIL + PREMIUM_EMAILS remain as a *budget* privilege —
+ * they get larger daily/monthly caps.
  */
-export function isAllowedEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return email.trim().toLowerCase() === env.ALLOWED_EMAIL;
+
+type UserLike = { email?: string | null } | null | undefined;
+
+export function normalizeEmail(email: string | null | undefined): string {
+  return (email ?? "").trim().toLowerCase();
 }
 
-export function assertAllowedEmail(email: string | null | undefined): string {
-  const normalized = (email ?? "").trim().toLowerCase();
-  if (!isAllowedEmail(normalized)) {
-    throw new Error("Not authorized.");
+/**
+ * Any authenticated user with an email is authorized for basic app
+ * operations. Paired with RLS, this is the one gate API routes need.
+ */
+export function isAuthenticated(user: UserLike): user is { email: string } {
+  return Boolean(user?.email && user.email.length > 0);
+}
+
+/**
+ * Premium emails get the bumped budget caps. Includes ALLOWED_EMAIL
+ * (the owner's email, for backward compat) plus anything listed in
+ * PREMIUM_EMAILS (comma-separated in env).
+ */
+export function isPremiumEmail(email: string | null | undefined): boolean {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+
+  // ALLOWED_EMAIL — owner — always premium.
+  try {
+    if (normalized === env.ALLOWED_EMAIL) return true;
+  } catch {
+    /* ALLOWED_EMAIL not configured — skip */
   }
+
+  const raw = process.env.PREMIUM_EMAILS;
+  if (!raw) return false;
+  const list = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(normalized);
+}
+
+// --- legacy shims (kept so old call sites compile while we migrate) ---
+
+/** @deprecated use isAuthenticated(user) — any authenticated user is allowed. */
+export function isAllowedEmail(email: string | null | undefined): boolean {
+  return Boolean(email && email.trim().length > 0);
+}
+
+/** @deprecated */
+export function assertAllowedEmail(email: string | null | undefined): string {
+  const normalized = normalizeEmail(email);
+  if (!normalized) throw new Error("Not authenticated.");
   return normalized;
 }

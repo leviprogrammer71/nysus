@@ -89,6 +89,7 @@ export function Workspace({
           suggested_seed_behavior: shot.suggested_seed_behavior,
           image_prompt: shot.image_prompt,
           narration: shot.narration,
+          animation_model: shot.animation_model,
         },
         seed_image_url: seedUrl,
         seed_source: seedSource,

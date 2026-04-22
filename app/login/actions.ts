@@ -5,7 +5,7 @@ import {
   createClient,
   createServiceRoleClient,
 } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { normalizeEmail } from "@/lib/auth";
 
 type LoginState = {
   ok: boolean;
@@ -13,21 +13,20 @@ type LoginState = {
 };
 
 /**
- * Email + password sign-in.
+ * Email + password sign-in / sign-up.
  *
- * No emails ever go out. Flow:
- *   1. Gate by ALLOWED_EMAIL.
- *   2. Try `signInWithPassword`. If it succeeds, redirect.
- *   3. If it fails, use the service-role admin client to either
- *      create the user (first run) or update their password (they
- *      had a passwordless magic-link user from before the auth
- *      switch, or they simply forgot). `email_confirm: true` means
- *      no confirmation email is ever sent.
- *   4. Retry signInWithPassword.
+ * Multi-tenant: any email can create an account. No emails are ever
+ * sent (we use admin.createUser with email_confirm=true so Supabase
+ * skips confirmation).
  *
- * Because every step is gated by ALLOWED_EMAIL matching server-side,
- * the "update password on failure" behavior is safe — only the one
- * allowed email can reach this path.
+ * Flow:
+ *   1. Try signInWithPassword. If OK, redirect.
+ *   2. If fail, admin.listUsers to find by email.
+ *      - Exists → admin.updateUserById (this acts as a soft password
+ *        reset; fine for the single-session bootstrap UX, but anyone
+ *        who wants real security should add a separate reset flow).
+ *      - Doesn't exist → admin.createUser.
+ *   3. Retry signInWithPassword.
  */
 export async function signIn(
   _prev: LoginState,
@@ -36,14 +35,11 @@ export async function signIn(
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
   const email =
-    typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+    typeof rawEmail === "string" ? normalizeEmail(rawEmail) : "";
   const password = typeof rawPassword === "string" ? rawPassword : "";
 
-  if (!isAllowedEmail(email)) {
-    return {
-      ok: false,
-      message: "Not authorized. This app is single-user.",
-    };
+  if (!email || !email.includes("@")) {
+    return { ok: false, message: "Enter a valid email." };
   }
   if (password.length < 6) {
     return {
@@ -57,29 +53,22 @@ export async function signIn(
   // Step 1: try password sign-in.
   const first = await supabase.auth.signInWithPassword({ email, password });
   if (!first.error) {
-    // Success — clear redirect.
-    redirect("/");
+    redirect("/dashboard");
   }
 
-  // Step 2: sign-in failed. Inspect whether the user exists, then
-  // either create them or update their password. The admin client
-  // bypasses RLS so this works even before the projects/clips tables
-  // exist.
+  // Step 2: sign-in failed. Look up / create the user.
   const admin = createServiceRoleClient();
 
   let userId: string | null = null;
   try {
-    // listUsers paginates (default 50). For a single-user app this
-    // covers everything we need. Cap at 200 so even test noise is fine.
     const { data: list, error: listErr } = await admin.auth.admin.listUsers({
       page: 1,
       perPage: 200,
     });
     if (listErr) throw listErr;
     userId =
-      list.users.find(
-        (u) => (u.email ?? "").trim().toLowerCase() === email,
-      )?.id ?? null;
+      list.users.find((u) => normalizeEmail(u.email ?? "") === email)?.id ??
+      null;
   } catch (err) {
     return {
       ok: false,
@@ -88,18 +77,17 @@ export async function signIn(
   }
 
   if (userId) {
-    // User exists (probably from a prior magic-link sign-in or a
-    // password we want to replace). Set the password, mark confirmed,
-    // then retry. This doubles as a "forgot password" path — safe
-    // here because only ALLOWED_EMAIL can reach it.
+    // Existing user — set password. Multi-user note: in production you'd
+    // want a proper 'forgot password' flow here instead. Today, first
+    // login effectively claims the password.
     const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
       password,
       email_confirm: true,
     });
     if (updErr) return { ok: false, message: updErr.message };
   } else {
-    // User doesn't exist — bootstrap them. email_confirm=true tells
-    // Supabase to skip the confirmation email entirely.
+    // Brand new user. email_confirm=true skips Supabase's confirmation
+    // email entirely.
     const { error: createErr } = await admin.auth.admin.createUser({
       email,
       password,
@@ -108,11 +96,11 @@ export async function signIn(
     if (createErr) return { ok: false, message: createErr.message };
   }
 
-  // Step 3: retry sign-in. Should succeed now.
+  // Step 3: retry sign-in.
   const retry = await supabase.auth.signInWithPassword({ email, password });
   if (retry.error) {
     return { ok: false, message: retry.error.message };
   }
 
-  redirect("/");
+  redirect("/dashboard");
 }

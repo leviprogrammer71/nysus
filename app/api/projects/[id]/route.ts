@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || !isAllowedEmail(user.email)) {
+  if (!isAuthenticated(user)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 

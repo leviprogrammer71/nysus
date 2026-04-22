@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import {
   streamChatCompletion,
   parseOpenRouterStream,
@@ -37,7 +37,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || !isAllowedEmail(user.email)) {
+  if (!isAuthenticated(user)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 
@@ -64,7 +64,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   // Budget gate for critique (vision + Claude).
   const admin = createServiceRoleClient();
-  const gate = await gateCritique(admin);
+  const gate = await gateCritique({ admin, userId: user.id, email: user.email });
   if (!gate.ok) {
     return NextResponse.json(
       { error: gate.reason, code: gate.code },

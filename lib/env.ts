@@ -35,11 +35,14 @@ export const env = {
     return req("CRON_SECRET", process.env.CRON_SECRET);
   },
   get ALLOWED_EMAIL() {
-    return req(
-      "ALLOWED_EMAIL",
-      process.env.ALLOWED_EMAIL,
-      "this gates magic-link auth to a single address",
-    ).toLowerCase().trim();
+    // Soft env now — the owner email gets premium budget caps. Not
+    // required for the app to function.
+    return (process.env.ALLOWED_EMAIL ?? "").toLowerCase().trim();
+  },
+  get OPENAI_API_KEY() {
+    // Optional. When present, stills use OpenAI gpt-image-1;
+    // otherwise we fall back to Replicate Flux.
+    return (process.env.OPENAI_API_KEY ?? "").trim();
   },
   get CRITIQUE_MODE(): "on_demand" {
     const v = process.env.CRITIQUE_MODE ?? "on_demand";

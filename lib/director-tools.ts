@@ -157,6 +157,30 @@ export const DIRECTOR_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "generate_character_portrait",
+      description:
+        "Produce the FIRST image of a project — a portrait of the named character, composed from their sheet entry + the aesthetic bible. The portrait is stored at the top of that character's reference_images so every subsequent chat turn sees it, and every scene still inherits the consistent face. Call this immediately after update_character_sheet or add_character, BEFORE emitting any json-shot scenes. If the character already has a portrait you like, skip this call.",
+      parameters: {
+        type: "object",
+        properties: {
+          character_name: {
+            type: "string",
+            description:
+              "The name of the character to portrait. Must match a character already in the sheet.",
+          },
+          summary: {
+            type: "string",
+            description:
+              "Short past-tense sentence for the user, e.g. 'Generated David's portrait.'",
+          },
+        },
+        required: ["character_name", "summary"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "update_project_meta",
       description:
         "Update the project's title and/or description. Use this if the user asks you to rename the project or refine its one-line pitch.",
@@ -178,6 +202,10 @@ export const DIRECTOR_TOOLS: ToolDefinition[] = [
 export type ToolContext = {
   admin: SupabaseClient<Database>;
   projectId: string;
+  /** Request origin (for calling our own portrait endpoint). */
+  origin: string;
+  /** Session cookies forwarded to internal routes. */
+  cookieHeader?: string;
 };
 
 export type ToolResult = {
@@ -220,6 +248,8 @@ export async function executeDirectorTool(
         return await runUpdateAestheticBible(args, ctx);
       case "update_project_meta":
         return await runUpdateProjectMeta(args, ctx);
+      case "generate_character_portrait":
+        return await runGeneratePortrait(args, ctx);
       default:
         return {
           result: `ERROR: no such tool: ${name}`,
@@ -391,6 +421,63 @@ async function runUpdateProjectMeta(
       name: "update_project_meta",
       summary,
       detail: parts.join(" · "),
+    },
+  };
+}
+
+async function runGeneratePortrait(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  const name = typeof args.character_name === "string" ? args.character_name : "";
+  const summary =
+    typeof args.summary === "string"
+      ? args.summary
+      : `generated ${name || "character"} portrait`;
+  if (!name.trim()) {
+    return {
+      result: "ERROR: character_name required.",
+      event: { name: "generate_character_portrait", summary: "missing name" },
+    };
+  }
+
+  // Call our own portrait endpoint with the session cookies forwarded
+  // so RLS + auth line up. The endpoint handles prompt composition,
+  // image generation (OpenAI if key, else Flux), Storage upload, and
+  // patching the character's reference_images.
+  const res = await fetch(`${ctx.origin}/api/characters/portrait`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(ctx.cookieHeader ? { cookie: ctx.cookieHeader } : {}),
+    },
+    body: JSON.stringify({
+      project_id: ctx.projectId,
+      character_name: name.trim(),
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    path?: string;
+    provider?: string;
+    model?: string;
+    error?: string;
+  };
+  if (!res.ok) {
+    return {
+      result: `ERROR: ${body.error ?? res.statusText}`,
+      event: {
+        name: "generate_character_portrait",
+        summary: `failed — ${body.error ?? res.statusText}`,
+      },
+    };
+  }
+  return {
+    result: `ok: portrait generated via ${body.provider ?? "provider"} (${body.model ?? "model"})`,
+    event: {
+      name: "generate_character_portrait",
+      summary,
+      detail: `${name} — portrait saved`,
     },
   };
 }

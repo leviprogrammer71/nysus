@@ -60,10 +60,8 @@ export function LoginForm() {
       ) : null}
 
       <p className="font-body text-xs text-ink-soft/60 leading-relaxed">
-        This app is single-user. Only the email configured as{" "}
-        <code className="font-mono text-[11px]">ALLOWED_EMAIL</code> can sign in.
-        First sign-in sets your password; later sign-ins validate it. No emails
-        are ever sent.
+        First sign-in creates the account and sets your password; later
+        sign-ins validate it. No emails are ever sent.
       </p>
     </form>
   );

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import { gateChat, recordUsage } from "@/lib/budget";
 import {
   streamChatCompletion,
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || !isAllowedEmail(user.email)) {
+  if (!isAuthenticated(user)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createServiceRoleClient();
-  const gate = await gateChat(admin);
+  const gate = await gateChat({ admin, userId: user.id, email: user.email });
   if (!gate.ok) {
     return NextResponse.json(
       { error: gate.reason, code: gate.code },
@@ -249,11 +249,18 @@ export async function POST(request: NextRequest) {
 
           // Execute each tool and emit tool-event fences so the
           // client can render the outcome inline.
+          const toolOrigin = new URL(request.url).origin;
+          const toolCookies = request.headers.get("cookie") ?? undefined;
           for (const tc of collectedToolCalls) {
             const result = await executeDirectorTool(
               tc.function.name,
               tc.function.arguments,
-              { admin, projectId: project!.id },
+              {
+                admin,
+                projectId: project!.id,
+                origin: toolOrigin,
+                cookieHeader: toolCookies,
+              },
             );
 
             // Emit the tool-event block for the chat UI.

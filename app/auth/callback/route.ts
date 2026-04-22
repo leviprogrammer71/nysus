@@ -1,19 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isAllowedEmail } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 
 /**
- * Magic-link callback.
+ * OAuth / magic-link callback (vestigial — kept for backward compat
+ * if any legacy link flows still route here; the main auth path is
+ * now password sign-in through /login).
  *
- * Supabase redirects here with `?code=<otp>`. We exchange it for a
- * session, then double-check the resulting user's email matches
- * ALLOWED_EMAIL. If anyone else somehow obtains a valid link, we sign
- * them out immediately and redirect them to /login with an error.
+ * Exchanges the code for a session, verifies we have an authenticated
+ * user, redirects to the requested next page (defaults to /dashboard).
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/";
+  const next = url.searchParams.get("next") ?? "/dashboard";
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=missing_code", url.origin));
@@ -28,11 +28,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Belt + suspenders: confirm the session belongs to ALLOWED_EMAIL.
   const { data: { user } } = await supabase.auth.getUser();
-  if (!isAllowedEmail(user?.email)) {
+  if (!isAuthenticated(user)) {
     await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/login?error=not_authorized", url.origin));
+    return NextResponse.redirect(new URL("/login?error=no_session", url.origin));
   }
 
   return NextResponse.redirect(new URL(next, url.origin));

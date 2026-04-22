@@ -40,6 +40,15 @@ export const shotPromptSchema = z.object({
     .enum(["auto", "manual_pick", "none"])
     .optional()
     .default("auto"),
+  /**
+   * Which image-to-video model to use when animating this scene.
+   * Seedance 2.0 is the default and mandated for realistic projects;
+   * Kling is chosen for 3D / stylized / animated aesthetics.
+   */
+  animation_model: z
+    .enum(["seedance", "kling"])
+    .optional()
+    .default("seedance"),
 });
 
 export type ShotPrompt = z.infer<typeof shotPromptSchema>;

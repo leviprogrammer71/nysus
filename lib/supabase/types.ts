@@ -159,7 +159,7 @@ type ClipsTable = {
   ];
 };
 
-export type UsageProvider = "replicate" | "openrouter";
+export type UsageProvider = "replicate" | "openrouter" | "openai";
 export type UsageAction = "generate" | "regenerate" | "chat" | "critique";
 
 type UsageTable = {
