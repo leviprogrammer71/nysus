@@ -14,6 +14,8 @@ import {
   buildProjectContextSuffix,
 } from "@/lib/prompts/director";
 import { DIRECTOR_TOOLS, executeDirectorTool } from "@/lib/director-tools";
+import { collectLabeledRefs } from "@/lib/references";
+import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,37 +103,83 @@ export async function POST(request: NextRequest) {
 
   // Re-read the project's sheet/bible fresh on each turn so tool
   // edits inside a single user turn are reflected in the context.
-  async function freshProjectContext() {
+  async function freshProjectContext(): Promise<{
+    suffix: string;
+    refParts: Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    >;
+  }> {
     const { data } = await admin
       .from("projects")
       .select("title, character_sheet, aesthetic_bible")
       .eq("id", project!.id)
       .single();
-    return buildProjectContextSuffix({
+
+    const sheet = (data?.character_sheet ?? project!.character_sheet ?? {}) as CharacterSheet;
+    const bible = (data?.aesthetic_bible ?? project!.aesthetic_bible ?? {}) as AestheticBible;
+
+    const suffix = buildProjectContextSuffix({
       title: data?.title ?? project!.title,
-      character_sheet: data?.character_sheet ?? project!.character_sheet,
-      aesthetic_bible: data?.aesthetic_bible ?? project!.aesthetic_bible,
+      character_sheet: sheet,
+      aesthetic_bible: bible,
     });
+
+    // Collect + sign every reference image (per character, per bible).
+    // Each gets a short-lived URL and a labeled text anchor so Claude
+    // knows what it's looking at.
+    const labeled = collectLabeledRefs(sheet, bible);
+    const refParts: Array<
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    > = [];
+    if (labeled.length > 0) {
+      refParts.push({
+        type: "text",
+        text: "\n\nREFERENCE IMAGES (carry forward into your draft):\n",
+      });
+      for (const r of labeled) {
+        const { data: signed } = await admin.storage
+          .from("clips")
+          .createSignedUrl(r.path, 60 * 30);
+        if (!signed?.signedUrl) continue;
+        refParts.push({ type: "text", text: `\n— ${r.label}:` });
+        refParts.push({
+          type: "image_url",
+          image_url: { url: signed.signedUrl },
+        });
+      }
+    }
+
+    return { suffix, refParts };
   }
 
-  const initialContextSuffix = await freshProjectContext();
+  const { suffix: initialContextSuffix, refParts: initialRefParts } =
+    await freshProjectContext();
 
-  const currentUserContent: OpenRouterMessage =
-    attachedImageUrls.length > 0
-      ? {
-          role: "user",
-          content: [
-            { type: "text", text: `${body.message}\n${initialContextSuffix}` },
-            ...attachedImageUrls.map((url) => ({
-              type: "image_url" as const,
-              image_url: { url },
-            })),
-          ],
-        }
-      : {
-          role: "user",
-          content: `${body.message}\n${initialContextSuffix}`,
-        };
+  // Build the current user turn. Multipart when we have either chat
+  // attachments OR persistent reference images in sheet/bible.
+  const hasMultipart =
+    attachedImageUrls.length > 0 || initialRefParts.length > 0;
+
+  const currentUserContent: OpenRouterMessage = hasMultipart
+    ? {
+        role: "user",
+        content: [
+          { type: "text", text: `${body.message}\n${initialContextSuffix}` },
+          // Persistent reference images from character_sheet + bible
+          ...initialRefParts,
+          // Per-message attachments (paste / drag / picker)
+          ...attachedImageUrls.map((url) => ({
+            type: "image_url" as const,
+            image_url: { url },
+          })),
+        ],
+      }
+    : {
+        role: "user",
+        content: `${body.message}\n${initialContextSuffix}`,
+      };
 
   const baseHistory: OpenRouterMessage[] = [
     { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
@@ -227,14 +275,45 @@ export async function POST(request: NextRequest) {
           }
 
           // Refresh PROJECT CONTEXT — tools may have changed state.
-          // We replace the last user message's content so the model
-          // sees the new sheet/bible in its next call.
-          const refreshed = await freshProjectContext();
+          // We rebuild the last user message's content (text or
+          // multipart) so the model sees the new sheet/bible +
+          // latest reference images in its next call.
+          const { suffix: refreshedSuffix, refParts: refreshedRefParts } =
+            await freshProjectContext();
           for (let i = messages.length - 1; i >= 0; i--) {
             const m = messages[i];
             if (m.role === "user") {
               if (typeof m.content === "string") {
-                m.content = `${body.message}\n${refreshed}`;
+                if (refreshedRefParts.length === 0) {
+                  m.content = `${body.message}\n${refreshedSuffix}`;
+                } else {
+                  m.content = [
+                    {
+                      type: "text",
+                      text: `${body.message}\n${refreshedSuffix}`,
+                    },
+                    ...refreshedRefParts,
+                    ...attachedImageUrls.map((url) => ({
+                      type: "image_url" as const,
+                      image_url: { url },
+                    })),
+                  ];
+                }
+              } else if (Array.isArray(m.content)) {
+                // Replace the first text part + append the latest
+                // reference parts, preserving per-turn attachments.
+                const next = [
+                  {
+                    type: "text" as const,
+                    text: `${body.message}\n${refreshedSuffix}`,
+                  },
+                  ...refreshedRefParts,
+                  ...attachedImageUrls.map((url) => ({
+                    type: "image_url" as const,
+                    image_url: { url },
+                  })),
+                ];
+                m.content = next;
               }
               break;
             }

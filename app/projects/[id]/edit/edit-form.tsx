@@ -6,6 +6,7 @@ import type {
   CharacterSheet,
   AestheticBible,
 } from "@/lib/supabase/types";
+import { ReferenceStrip } from "./reference-strip";
 
 /**
  * Structured project editor.
@@ -30,6 +31,10 @@ type CharacterRow = {
   wardrobe: string;
   voice: string;
   demeanor: string;
+  // Carried through on save so refs uploaded via ReferenceStrip survive
+  // a structured-form save. The strip manages this list; the form
+  // doesn't edit it.
+  reference_images: string[];
 };
 
 const emptyCharacter = (): CharacterRow => ({
@@ -40,6 +45,7 @@ const emptyCharacter = (): CharacterRow => ({
   wardrobe: "",
   voice: "",
   demeanor: "",
+  reference_images: [],
 });
 
 function normalizeCharacters(raw: unknown): CharacterRow[] {
@@ -50,6 +56,10 @@ function normalizeCharacters(raw: unknown): CharacterRow[] {
     const o = (c ?? {}) as Record<string, unknown>;
     const s = (k: string): string =>
       typeof o[k] === "string" ? (o[k] as string) : "";
+    const arr = (k: string): string[] =>
+      Array.isArray(o[k])
+        ? (o[k] as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
     return {
       name: s("name"),
       age: s("age"),
@@ -58,6 +68,7 @@ function normalizeCharacters(raw: unknown): CharacterRow[] {
       wardrobe: s("wardrobe"),
       voice: s("voice"),
       demeanor: s("demeanor"),
+      reference_images: arr("reference_images"),
     };
   });
 }
@@ -79,6 +90,7 @@ function normalizeBible(raw: unknown): {
   audio_signature: string;
   thematic_motifs: string[];
   forbidden: string[];
+  reference_images: string[];
 } {
   const o = (raw ?? {}) as Record<string, unknown>;
   const s = (k: string): string =>
@@ -95,6 +107,7 @@ function normalizeBible(raw: unknown): {
     audio_signature: s("audio_signature"),
     thematic_motifs: arr("thematic_motifs"),
     forbidden: arr("forbidden"),
+    reference_images: arr("reference_images"),
   };
 }
 
@@ -104,13 +117,28 @@ function buildCharacterSheet(
 ): CharacterSheet {
   const cleaned = characters
     .map((c) => {
-      const entry: Record<string, string> = {};
-      (Object.keys(c) as (keyof CharacterRow)[]).forEach((k) => {
-        if (c[k].trim().length > 0) entry[k] = c[k].trim();
-      });
+      const entry: Record<string, unknown> = {};
+      const stringKeys: (keyof CharacterRow)[] = [
+        "name",
+        "age",
+        "ethnicity",
+        "appearance",
+        "wardrobe",
+        "voice",
+        "demeanor",
+      ];
+      for (const k of stringKeys) {
+        const v = c[k];
+        if (typeof v === "string" && v.trim().length > 0) entry[k] = v.trim();
+      }
+      // Preserve reference images — managed by ReferenceStrip, not
+      // edited via text fields here.
+      if (c.reference_images && c.reference_images.length > 0) {
+        entry.reference_images = c.reference_images;
+      }
       return entry;
     })
-    .filter((c) => Object.keys(c).length > 0);
+    .filter((c) => Object.keys(c).length > 0 && typeof c.name === "string");
 
   const sheet: CharacterSheet = {};
   if (cleaned.length > 0) {
@@ -137,6 +165,8 @@ function buildAestheticBible(b: ReturnType<typeof normalizeBible>): AestheticBib
   if (motifs.length > 0) out.thematic_motifs = motifs;
   const forbidden = b.forbidden.map((f) => f.trim()).filter(Boolean);
   if (forbidden.length > 0) out.forbidden = forbidden;
+  // Preserve mood-board refs managed by the ReferenceStrip.
+  if (b.reference_images.length > 0) out.reference_images = b.reference_images;
   return out;
 }
 
@@ -309,6 +339,7 @@ export function ProjectEditForm({
 
       {mode === "structured" ? (
         <StructuredEditor
+          projectId={projectId}
           characters={characters}
           setCharacters={setCharacters}
           setting={setting}
@@ -356,6 +387,7 @@ export function ProjectEditForm({
 // ------------------------------------------------------------------
 
 function StructuredEditor({
+  projectId,
   characters,
   setCharacters,
   setting,
@@ -363,6 +395,7 @@ function StructuredEditor({
   bible,
   setBible,
 }: {
+  projectId: string;
   characters: CharacterRow[];
   setCharacters: React.Dispatch<React.SetStateAction<CharacterRow[]>>;
   setting: { primary: string; recurring_symbol: string };
@@ -462,6 +495,19 @@ function StructuredEditor({
               placeholder="Low baritone, raspy; Oscar Isaac's quieter register"
               onChange={(v) => updateCharacter(i, "voice", v)}
             />
+
+            {c.name.trim().length > 0 ? (
+              <ReferenceStrip
+                projectId={projectId}
+                target={`character:${c.name.trim()}`}
+                label={`${c.name.trim()} references`}
+                initialPaths={c.reference_images}
+              />
+            ) : (
+              <p className="font-body text-xs text-ink-soft/60 italic">
+                Give this character a name to attach reference images.
+              </p>
+            )}
           </div>
         ))}
 
@@ -544,6 +590,18 @@ function StructuredEditor({
           tone="red"
           onChange={(next) => setBible((b) => ({ ...b, forbidden: next }))}
         />
+
+        <ReferenceStrip
+          projectId={projectId}
+          target="bible"
+          label="mood board"
+          initialPaths={bible.reference_images}
+        />
+        <p className="font-body text-xs text-ink-soft/60 leading-relaxed -mt-1">
+          Stills, paintings, screenshots — anything you want the director to
+          treat as the visual source of truth. The next chat turn will see
+          these alongside the text fields above.
+        </p>
       </section>
     </div>
   );

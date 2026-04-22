@@ -24,10 +24,13 @@ export interface CharacterSheet {
     wardrobe?: string;
     voice?: string;
     demeanor?: string;
+    /** Storage paths (not URLs) to reference images for this character. */
+    reference_images?: string[];
   }[];
   setting?: {
     primary?: string;
     recurring_symbol?: string;
+    reference_images?: string[];
   };
   [key: string]: unknown;
 }
@@ -40,6 +43,8 @@ export interface AestheticBible {
   audio_signature?: string;
   thematic_motifs?: string[];
   forbidden?: string[];
+  /** Mood-board: storage paths (not URLs). */
+  reference_images?: string[];
   [key: string]: unknown;
 }
 
