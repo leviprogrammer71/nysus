@@ -3,6 +3,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { deleteProject } from "./actions";
 import { Logomark } from "./components/logomark";
+import { UsageStrip } from "./components/usage-strip";
 
 // Home = projects list. Middleware guarantees `user` is present by
 // the time we get here.
@@ -132,15 +133,18 @@ export default async function HomePage() {
             NYSUS
           </span>
         </Link>
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            aria-label="Sign out"
-            className="px-2 py-2 min-h-11 font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
-          >
-            sign out
-          </button>
-        </form>
+        <div className="flex items-center gap-4">
+          <UsageStrip />
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              aria-label="Sign out"
+              className="px-2 py-2 min-h-11 font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
+            >
+              sign out
+            </button>
+          </form>
+        </div>
       </header>
 
       <div className="flex items-end justify-between mb-6">

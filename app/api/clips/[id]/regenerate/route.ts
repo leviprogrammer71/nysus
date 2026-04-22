@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { cancelPrediction, createPrediction } from "@/lib/replicate";
 import { buildSeedanceInput, SEEDANCE_MODEL } from "@/lib/seedance";
 import { shotPromptSchema } from "@/lib/shot-prompt";
+import { gateGeneration, recordUsage } from "@/lib/budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,15 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!clip) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const admin = createServiceRoleClient();
+  const gate = await gateGeneration(admin);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: gate.reason, code: gate.code },
+      { status: 429 },
+    );
+  }
 
   // Cancel a lingering in-flight prediction before starting a new one.
   if (
@@ -76,7 +86,6 @@ export async function POST(_req: NextRequest, { params }: Params) {
       webhook_events_filter: ["completed"],
     });
 
-    const admin = createServiceRoleClient();
     const { data: updated } = await admin
       .from("clips")
       .update({
@@ -90,6 +99,19 @@ export async function POST(_req: NextRequest, { params }: Params) {
       .eq("id", clip.id)
       .select("*")
       .single();
+
+    void recordUsage({
+      admin,
+      userId: user.id,
+      projectId: clip.project_id,
+      provider: "replicate",
+      action: "regenerate",
+      metadata: {
+        clip_id: clip.id,
+        prediction_id: prediction.id,
+        model: SEEDANCE_MODEL,
+      },
+    });
 
     return NextResponse.json({ clip: updated });
   } catch (err) {

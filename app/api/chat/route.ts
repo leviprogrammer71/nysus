@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAllowedEmail } from "@/lib/auth";
+import { gateChat, recordUsage } from "@/lib/budget";
 import {
   streamChatCompletion,
   parseOpenRouterStream,
@@ -18,6 +19,12 @@ export const dynamic = "force-dynamic";
 const bodySchema = z.object({
   project_id: z.string().uuid(),
   message: z.string().trim().min(1).max(8000),
+  /**
+   * Signed image URLs from /api/chat/attach — passed through to the
+   * OpenRouter vision content block and persisted on the user
+   * message's attached_frame_urls column.
+   */
+  attached_image_urls: z.array(z.string().url()).max(8).optional(),
 });
 
 // How many of the most-recent prior messages to send to Claude. Keep
@@ -72,13 +79,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: messagesError.message }, { status: 500 });
   }
 
+  // --- Budget + rate-limit gate --------------------------------------
+  const admin = createServiceRoleClient();
+  const gate = await gateChat(admin);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: gate.reason, code: gate.code },
+      { status: 429 },
+    );
+  }
+
   // --- Persist user message before we call Claude --------------------
+  const attachedImageUrls = body.attached_image_urls ?? [];
   const { data: userMessageRow, error: insertUserError } = await supabase
     .from("messages")
     .insert({
       project_id: project.id,
       role: "user",
       content: body.message,
+      attached_frame_urls: attachedImageUrls,
     })
     .select("id, created_at")
     .single();
@@ -101,6 +120,27 @@ export async function POST(request: NextRequest) {
   // user message. We store raw user text in the DB and inject fresh
   // context on every send, so updates to the character sheet or
   // aesthetic bible propagate to the full transcript immediately.
+  //
+  // If the current turn has attached images, send as a multimodal
+  // content array with text + image_url parts so Claude's vision sees
+  // them. Historical messages stay text-only (cheap on tokens).
+  const currentUserContent =
+    attachedImageUrls.length > 0
+      ? {
+          role: "user" as const,
+          content: [
+            { type: "text" as const, text: `${body.message}\n${projectContextSuffix}` },
+            ...attachedImageUrls.map((url) => ({
+              type: "image_url" as const,
+              image_url: { url },
+            })),
+          ],
+        }
+      : {
+          role: "user" as const,
+          content: `${body.message}\n${projectContextSuffix}`,
+        };
+
   const messages: OpenRouterMessage[] = [
     { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
     ...(priorMessages ?? [])
@@ -113,10 +153,7 @@ export async function POST(request: NextRequest) {
         content:
           m.role === "user" ? `${m.content}\n${projectContextSuffix}` : m.content,
       })),
-    {
-      role: "user",
-      content: `${body.message}\n${projectContextSuffix}`,
-    },
+    currentUserContent,
   ];
 
   // --- Kick off the stream -------------------------------------------
@@ -166,6 +203,19 @@ export async function POST(request: NextRequest) {
               }
             });
         }
+
+        // Record the paid turn for budget accounting.
+        void recordUsage({
+          admin,
+          userId: user.id,
+          projectId: project.id,
+          provider: "openrouter",
+          action: "chat",
+          metadata: {
+            has_attachments: attachedImageUrls.length > 0,
+            attachment_count: attachedImageUrls.length,
+          },
+        });
       }
     },
   });

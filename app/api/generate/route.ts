@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { createPrediction } from "@/lib/replicate";
 import { buildSeedanceInput, SEEDANCE_MODEL } from "@/lib/seedance";
 import { shotPromptSchema } from "@/lib/shot-prompt";
+import { gateGeneration, recordUsage } from "@/lib/budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: projectError?.message ?? "Project not found" },
       { status: 404 },
+    );
+  }
+
+  // --- Budget + rate-limit gate --------------------------------------
+  const admin = createServiceRoleClient();
+  const gate = await gateGeneration(admin);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: gate.reason, code: gate.code },
+      { status: 429 },
     );
   }
 
@@ -114,8 +125,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Service-role update so we don't depend on RLS timing for the
-    // prediction_id write.
-    const admin = createServiceRoleClient();
+    // prediction_id write. `admin` is already instantiated above for
+    // the budget gate.
     await admin
       .from("clips")
       .update({
@@ -123,6 +134,20 @@ export async function POST(request: NextRequest) {
         status: prediction.status === "starting" ? "queued" : "processing",
       })
       .eq("id", clipRow.id);
+
+    // Record paid usage for the budget dashboard. Fire-and-forget.
+    void recordUsage({
+      admin,
+      userId: user.id,
+      projectId: project.id,
+      provider: "replicate",
+      action: "generate",
+      metadata: {
+        clip_id: clipRow.id,
+        prediction_id: prediction.id,
+        model: SEEDANCE_MODEL,
+      },
+    });
 
     return NextResponse.json({
       clip_id: clipRow.id,

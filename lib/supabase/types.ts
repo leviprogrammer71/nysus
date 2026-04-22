@@ -137,6 +137,49 @@ type ClipsTable = {
   ];
 };
 
+export type UsageProvider = "replicate" | "openrouter";
+export type UsageAction = "generate" | "regenerate" | "chat" | "critique";
+
+type UsageTable = {
+  Row: {
+    id: string;
+    user_id: string | null;
+    project_id: string | null;
+    provider: UsageProvider;
+    action: UsageAction;
+    cost_usd_cents: number;
+    tokens_in: number | null;
+    tokens_out: number | null;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+  Insert: {
+    id?: string;
+    user_id?: string | null;
+    project_id?: string | null;
+    provider: UsageProvider;
+    action: UsageAction;
+    cost_usd_cents?: number;
+    tokens_in?: number | null;
+    tokens_out?: number | null;
+    metadata?: Record<string, unknown>;
+    created_at?: string;
+  };
+  Update: {
+    id?: string;
+    user_id?: string | null;
+    project_id?: string | null;
+    provider?: UsageProvider;
+    action?: UsageAction;
+    cost_usd_cents?: number;
+    tokens_in?: number | null;
+    tokens_out?: number | null;
+    metadata?: Record<string, unknown>;
+    created_at?: string;
+  };
+  Relationships: [];
+};
+
 type MessagesTable = {
   Row: {
     id: string;
@@ -183,6 +226,7 @@ export interface Database {
       projects: ProjectsTable;
       clips: ClipsTable;
       messages: MessagesTable;
+      usage: UsageTable;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

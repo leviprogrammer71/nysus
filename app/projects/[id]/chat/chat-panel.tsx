@@ -24,9 +24,21 @@ export function ChatPanel({
   // whenever the draft goes empty (fresh type).
   const [inputVoiceTouched, setInputVoiceTouched] = useState(false);
 
+  // Image attachments for the current draft. Uploaded eagerly so the
+  // send path doesn't block on the network.
+  type Attachment = {
+    id: string;
+    previewUrl: string; // local object URL for the chip
+    uploading: boolean;
+    remoteUrl?: string; // signed URL from /api/chat/attach
+    error?: string;
+  };
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
   const abortRef = useRef<AbortController | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const dictation = useDictation({
     onFinal: (text) => {
@@ -63,12 +75,120 @@ export function ChatPanel({
     return () => abortRef.current?.abort();
   }, []);
 
+  const uploadAttachment = useCallback(
+    async (file: File) => {
+      const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const previewUrl = URL.createObjectURL(file);
+      setAttachments((prev) => [
+        ...prev,
+        { id, previewUrl, uploading: true },
+      ]);
+      try {
+        const form = new FormData();
+        form.append("project_id", projectId);
+        form.append("file", file);
+        const res = await fetch("/api/chat/attach", {
+          method: "POST",
+          body: form,
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? res.statusText);
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? { ...a, uploading: false, remoteUrl: body.url as string }
+              : a,
+          ),
+        );
+      } catch (err) {
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? {
+                  ...a,
+                  uploading: false,
+                  error: err instanceof Error ? err.message : String(err),
+                }
+              : a,
+          ),
+        );
+      }
+    },
+    [projectId],
+  );
+
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      if (list.length === 0) return;
+      const remainingSlots = 8 - attachments.length;
+      for (const f of list.slice(0, Math.max(0, remainingSlots))) {
+        void uploadAttachment(f);
+      }
+    },
+    [attachments.length, uploadAttachment],
+  );
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const removed = prev.find((a) => a.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  // Clean up all object URLs on unmount.
+  useEffect(() => {
+    return () => {
+      setAttachments((prev) => {
+        prev.forEach((a) => URL.revokeObjectURL(a.previewUrl));
+        return prev;
+      });
+    };
+  }, []);
+
+  // Paste handler — when the textarea is focused, pasted images land
+  // as attachments instead of garbage text in the input.
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files: File[] = [];
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === "file" && it.type.startsWith("image/")) {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        addFiles(files);
+      }
+    },
+    [addFiles],
+  );
+
+  const [dragActive, setDragActive] = useState(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLElement>) => {
+      e.preventDefault();
+      setDragActive(false);
+      if (e.dataTransfer.files.length > 0) {
+        addFiles(e.dataTransfer.files);
+      }
+    },
+    [addFiles],
+  );
+
   const sendText = useCallback(async (
     rawText: string,
     opts?: { source?: "voice" },
   ) => {
     const text = rawText.trim();
     if (!text || streaming) return;
+    // Block send while uploads are in flight.
+    if (attachments.some((a) => a.uploading)) return;
 
     if ("vibrate" in navigator) navigator.vibrate?.(6);
     setError(null);
@@ -76,6 +196,9 @@ export function ChatPanel({
       opts?.source === "voice"
         ? `[User dictated this aloud, may contain transcription errors — interpret generously, ask clarifying questions if ambiguous.]\n\n${text}`
         : text;
+    const attachedUrls = attachments
+      .filter((a) => a.remoteUrl && !a.error)
+      .map((a) => a.remoteUrl!) as string[];
 
     // Optimistically append the user message + a placeholder assistant
     // message that we'll mutate as the stream arrives.
@@ -100,9 +223,20 @@ export function ChatPanel({
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id: projectId, message: messageToSend }),
+        body: JSON.stringify({
+          project_id: projectId,
+          message: messageToSend,
+          ...(attachedUrls.length > 0
+            ? { attached_image_urls: attachedUrls }
+            : {}),
+        }),
         signal: controller.signal,
       });
+
+      // Clear attachments on successful submit start — they ride with
+      // the user message we've already sent.
+      attachments.forEach((a) => URL.revokeObjectURL(a.previewUrl));
+      setAttachments([]);
 
       if (!resp.ok || !resp.body) {
         const payload = await resp.json().catch(() => ({ error: resp.statusText }));
@@ -144,7 +278,7 @@ export function ChatPanel({
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [streaming, projectId]);
+  }, [streaming, projectId, attachments]);
 
   const send = useCallback(async () => {
     const text = input;
@@ -202,8 +336,78 @@ export function ChatPanel({
           e.preventDefault();
           void send();
         }}
-        className="border-t border-ink/10 bg-paper px-4 py-3 pb-safe-plus-3"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+            setDragActive(true);
+          }
+        }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+        className={`relative border-t bg-paper px-4 py-3 pb-safe-plus-3 transition-colors ${
+          dragActive ? "border-sepia-deep bg-paper-deep" : "border-ink/10"
+        }`}
       >
+        {dragActive ? (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-paper/70 backdrop-blur-sm">
+            <span className="font-hand text-xl text-sepia-deep">
+              drop image to attach
+            </span>
+          </div>
+        ) : null}
+
+        {attachments.length > 0 ? (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className="relative w-16 h-16 shrink-0 bg-paper-deep border border-ink/20 overflow-hidden"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={att.previewUrl}
+                  alt="Attachment preview"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                {att.uploading ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-paper/70">
+                    <div className="w-4 h-4 border-2 border-ink/40 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : null}
+                {att.error ? (
+                  <div
+                    title={att.error}
+                    className="absolute inset-0 flex items-center justify-center bg-red-grease/30 font-display text-red-grease text-lg"
+                  >
+                    !
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label="Remove attachment"
+                  onClick={() => removeAttachment(att.id)}
+                  className="absolute -top-1 -right-1 w-6 h-6 bg-paper border border-ink/40 rounded-full font-display text-sm text-ink-soft hover:text-ink flex items-center justify-center leading-none"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            // Reset so picking the same file twice in a row still fires change.
+            e.target.value = "";
+          }}
+        />
+
         <div className="flex items-end gap-3">
           <button
             type="button"
@@ -267,6 +471,29 @@ export function ChatPanel({
             </svg>
           </button>
 
+          <button
+            type="button"
+            aria-label="Attach image"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={streaming || attachments.length >= 8}
+            title="Attach an image (or paste / drop one)"
+            className="shrink-0 w-10 h-10 rounded-full border border-ink/30 text-ink-soft hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 14.5 13.5 7a4 4 0 0 0-5.7 5.7l8 8a2.5 2.5 0 0 0 3.5-3.5L11.3 9.2" />
+            </svg>
+          </button>
+
           <textarea
             ref={textareaRef}
             value={input}
@@ -280,6 +507,7 @@ export function ChatPanel({
               }
             }}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder="say it to the director…"
             rows={1}
             disabled={streaming}

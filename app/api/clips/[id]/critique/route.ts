@@ -10,6 +10,7 @@ import {
   DIRECTOR_SYSTEM_PROMPT,
   buildProjectContextSuffix,
 } from "@/lib/prompts/director";
+import { gateCritique, recordUsage } from "@/lib/budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,9 +62,18 @@ export async function POST(_req: NextRequest, { params }: Params) {
     .maybeSingle();
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Budget gate for critique (vision + Claude).
+  const admin = createServiceRoleClient();
+  const gate = await gateCritique(admin);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: gate.reason, code: gate.code },
+      { status: 429 },
+    );
+  }
+
   // Sign each sampled frame URL for Claude's vision call. Sampled
   // frame paths live under {project}/{clip}/sample_{0..2}.jpg.
-  const admin = createServiceRoleClient();
   const frameUrls: string[] = [];
   for (let i = 0; i < 3; i++) {
     const path = `${clip.project_id}/${clip.id}/sample_${i}.jpg`;
@@ -135,6 +145,18 @@ export async function POST(_req: NextRequest, { params }: Params) {
       role: "assistant",
       content: `*Consulted the chorus on shot #${clip.shot_metadata?.shot_number ?? ""}*\n\n${out}`,
       attached_frame_urls: frameUrls,
+    });
+
+    void recordUsage({
+      admin,
+      userId: user.id,
+      projectId: clip.project_id,
+      provider: "openrouter",
+      action: "critique",
+      metadata: {
+        clip_id: clip.id,
+        frame_count: frameUrls.length,
+      },
     });
 
     return NextResponse.json({ critique: out });
