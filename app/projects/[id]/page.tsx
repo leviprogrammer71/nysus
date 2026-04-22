@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Workspace } from "./workspace";
 import type { ChatMessage } from "./chat/message";
 import type { TimelineClip } from "./timeline/types";
+import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -50,14 +51,8 @@ export default async function ProjectPage({ params }: PageProps) {
 
   const initialClips: TimelineClip[] = (clipsRaw ?? []) as TimelineClip[];
 
-  const chars = (project.character_sheet?.characters ?? []) as Array<{
-    name?: string;
-  }>;
-  const bible = project.aesthetic_bible ?? {};
-  const visualStyle =
-    typeof bible === "object" && bible !== null && "visual_style" in bible
-      ? ((bible as Record<string, unknown>).visual_style as string | undefined) ?? null
-      : null;
+  const sheet = (project.character_sheet ?? {}) as CharacterSheet;
+  const bible = (project.aesthetic_bible ?? {}) as AestheticBible;
 
   return (
     <Workspace
@@ -67,10 +62,8 @@ export default async function ProjectPage({ params }: PageProps) {
       initialMessages={priorMessages}
       initialClips={initialClips}
       updatedAt={project.updated_at}
-      characterNames={chars
-        .map((c, i) => c.name ?? `Character ${i + 1}`)
-        .filter(Boolean)}
-      visualStyle={visualStyle}
+      characterSheet={sheet}
+      aestheticBible={bible}
     />
   );
 }

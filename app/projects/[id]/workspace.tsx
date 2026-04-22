@@ -9,6 +9,8 @@ import { ClipDetailSheet } from "./timeline/clip-detail-sheet";
 import { StillsPanel } from "./timeline/stills-panel";
 import type { TimelineClip } from "./timeline/types";
 import type { ShotPrompt } from "@/lib/shot-prompt";
+import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
+import { ReferenceStrip } from "./edit/reference-strip";
 
 /**
  * Orchestrates the project workspace: chat, timeline, clip detail.
@@ -22,8 +24,8 @@ export function Workspace({
   initialMessages,
   initialClips,
   updatedAt,
-  characterNames,
-  visualStyle,
+  characterSheet,
+  aestheticBible,
 }: {
   projectId: string;
   projectTitle: string;
@@ -31,8 +33,8 @@ export function Workspace({
   initialMessages: ChatMessage[];
   initialClips: TimelineClip[];
   updatedAt: string;
-  characterNames: string[];
-  visualStyle: string | null;
+  characterSheet: CharacterSheet;
+  aestheticBible: AestheticBible;
 }) {
   const [clips, setClips] = useState<TimelineClip[]>(
     [...initialClips].sort((a, b) => a.order_index - b.order_index),
@@ -256,41 +258,9 @@ export function Workspace({
         ) : null}
       </section>
 
-      <section className="mb-6">
-        <h2 className="font-hand text-lg text-sepia-deep mb-2">
-          character sheet
-        </h2>
-        <div className="bg-paper-deep p-5">
-          {characterNames.length > 0 ? (
-            <ul className="flex flex-wrap gap-x-5 gap-y-1">
-              {characterNames.map((name, i) => (
-                <li key={i} className="font-display text-lg text-ink">
-                  {name}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="font-body text-sm text-ink-soft">
-              Not yet populated. Ask the director to draft a sheet.
-            </p>
-          )}
-        </div>
-      </section>
+      <CharacterSheetPanel projectId={projectId} sheet={characterSheet} />
 
-      <section className="mb-8">
-        <h2 className="font-hand text-lg text-sepia-deep mb-2">
-          aesthetic bible
-        </h2>
-        <div className="bg-paper-deep p-5">
-          {visualStyle ? (
-            <p className="font-body text-ink leading-relaxed">{visualStyle}</p>
-          ) : (
-            <p className="font-body text-sm text-ink-soft">
-              Not yet populated.
-            </p>
-          )}
-        </div>
-      </section>
+      <AestheticBiblePanel projectId={projectId} bible={aestheticBible} />
 
       <footer className="mt-2 font-body text-[11px] text-ink-soft/50">
         last updated {new Date(updatedAt).toLocaleString()}
@@ -312,5 +282,111 @@ export function Workspace({
         onUpdate={upsertClip}
       />
     </main>
+  );
+}
+
+/**
+ * Inline character sheet panel. Each existing character gets a mini
+ * reference strip so users can drop photos right here instead of
+ * navigating to /edit. When the sheet is empty, a single hint plus
+ * a bible-targeted drop zone lets you start from a reference image
+ * before Dio has written anything — the director will see the
+ * uploaded image on the next turn and can draft a character from it.
+ */
+function CharacterSheetPanel({
+  projectId,
+  sheet,
+}: {
+  projectId: string;
+  sheet: CharacterSheet;
+}) {
+  const characters = sheet.characters ?? [];
+  return (
+    <section className="mb-6">
+      <h2 className="font-hand text-lg text-sepia-deep mb-2">character sheet</h2>
+      <div className="bg-paper-deep p-4 space-y-4">
+        {characters.length === 0 ? (
+          <div className="space-y-3">
+            <p className="font-body text-sm text-ink-soft">
+              Not yet populated. Ask Dio to draft a sheet &mdash; or drop a
+              photo below and he&rsquo;ll work from it.
+            </p>
+            <ReferenceStrip
+              projectId={projectId}
+              target="bible"
+              label="start with a photo"
+              initialPaths={sheet.setting?.reference_images ?? []}
+            />
+          </div>
+        ) : (
+          <ul className="space-y-4">
+            {characters.map((c, i) => (
+              <li key={i} className="space-y-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-display text-lg text-ink">
+                    {c.name || `Character ${i + 1}`}
+                  </span>
+                  {c.demeanor ? (
+                    <span className="font-hand text-sm text-ink-soft truncate max-w-[60%] text-right">
+                      {c.demeanor}
+                    </span>
+                  ) : null}
+                </div>
+                {c.name?.trim() ? (
+                  <ReferenceStrip
+                    projectId={projectId}
+                    target={`character:${c.name.trim()}`}
+                    label={`${c.name.trim()} references`}
+                    initialPaths={c.reference_images ?? []}
+                  />
+                ) : (
+                  <p className="font-body text-xs text-ink-soft/60 italic">
+                    Give this character a name in edit mode to attach photos.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Inline aesthetic bible panel. Surfaces the visual_style text (if
+ * set) plus a mood-board drop strip. Every photo dropped here is
+ * fed to Dio on the next chat turn, labeled 'aesthetic bible
+ * reference'.
+ */
+function AestheticBiblePanel({
+  projectId,
+  bible,
+}: {
+  projectId: string;
+  bible: AestheticBible;
+}) {
+  const visualStyle =
+    typeof bible.visual_style === "string" ? bible.visual_style : null;
+  return (
+    <section className="mb-8">
+      <h2 className="font-hand text-lg text-sepia-deep mb-2">aesthetic bible</h2>
+      <div className="bg-paper-deep p-4 space-y-4">
+        {visualStyle ? (
+          <p className="font-body text-ink leading-relaxed">{visualStyle}</p>
+        ) : (
+          <p className="font-body text-sm text-ink-soft">
+            Not yet populated. Drop a still, a screenshot, a painting &mdash;
+            anything you want Dio to treat as the visual source of truth.
+          </p>
+        )}
+        <ReferenceStrip
+          projectId={projectId}
+          target="bible"
+          label="mood board"
+          initialPaths={bible.reference_images ?? []}
+        />
+      </div>
+    </section>
   );
 }
