@@ -1,0 +1,23 @@
+{
+  "$schema": "this file describes the showcase reels surfaced on the dashboard. safe to edit by hand.",
+  "reels": [
+    {
+      "slug": "i-dont-even-like-you",
+      "title": "I Don't Even Like You Tho",
+      "style": "realistic",
+      "tagline": "karmic debt, shot on 35mm naturalism",
+      "aspect_ratio": "9:16",
+      "video": "/showcase/i-dont-even-like-you/reel.mp4",
+      "poster": "/showcase/i-dont-even-like-you/poster.jpg"
+    },
+    {
+      "slug": "sorry-brother",
+      "title": "Sorry, Brother",
+      "style": "3d",
+      "tagline": "time-stop sequences in stylized 3D",
+      "aspect_ratio": "16:9",
+      "video": "/showcase/sorry-brother/reel.mp4",
+      "poster": "/showcase/sorry-brother/poster.jpg"
+    }
+  ]
+}

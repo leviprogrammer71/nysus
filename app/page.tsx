@@ -5,6 +5,8 @@ import { deleteProject } from "./actions";
 import { Logomark } from "./components/logomark";
 import { UsageStrip } from "./components/usage-strip";
 import { ProjectCard } from "./components/project-card";
+import { ShowcaseStrip } from "./components/showcase-strip";
+import { loadShowcase } from "@/lib/showcase";
 
 // Home = dashboard. Middleware guarantees `user` is present by
 // the time we get here.
@@ -109,7 +111,7 @@ export default async function HomePage() {
   // per row). RLS is redundant here — the user already owns everything
   // the project list returned.
   const admin = createServiceRoleClient();
-  const [videoCountR, stillCountR, clipsForThumbsR] = await Promise.all([
+  const [videoCountR, stillCountR, clipsForThumbsR, showcase] = await Promise.all([
     admin
       .from("clips")
       .select("*", { count: "exact", head: true })
@@ -123,6 +125,7 @@ export default async function HomePage() {
       .select("project_id, still_image_url, video_url, status, still_status, order_index, created_at")
       .order("created_at", { ascending: false })
       .limit(300),
+    loadShowcase(),
   ]);
 
   const totalProjects = projects?.length ?? 0;
@@ -214,6 +217,9 @@ export default async function HomePage() {
         <StatCard label="stills" value={totalStills} />
         <StatCard label="videos" value={totalVideos} />
       </section>
+
+      {/* Finished films (user's own) */}
+      <ShowcaseStrip reels={showcase} />
 
       {/* Projects */}
       <section className="mb-8">
