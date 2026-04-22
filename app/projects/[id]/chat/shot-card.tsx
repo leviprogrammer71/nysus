@@ -20,9 +20,9 @@ export function ShotCard({
 }: {
   shot: ShotPrompt;
   /**
-   * Legacy single-shot generate callback from the workspace. Kept so
-   * existing chats without an image_prompt still animate cleanly
-   * (user generates directly without a separate still step).
+   * Legacy single-shot generate callback from the workspace. Used
+   * when a shot has no image_prompt — straight to Seedance with
+   * whatever seed the workspace picks.
    */
   onGenerate?: (shot: ShotPrompt) => Promise<void>;
 }) {
@@ -32,6 +32,12 @@ export function ShotCard({
   const [stillUrl, setStillUrl] = useState<string | null>(null);
   const [stillError, setStillError] = useState<string | null>(null);
   const [videoBusy, setVideoBusy] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  // Once the still is generated, we own the underlying clip row and
+  // animate against IT rather than letting the workspace spin up a
+  // new one. This is what keeps every scene pinned to a single clip
+  // row with its still + its eventual video.
+  const [clipId, setClipId] = useState<string | null>(null);
 
   const hasImagePrompt = Boolean(
     shot.image_prompt && shot.image_prompt.length > 0,
@@ -49,8 +55,6 @@ export function ShotCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // project_id pulled from URL server-side (but we need to
-          // pass it). Grab it from window location.
           project_id: window.location.pathname.split("/")[2],
           shot,
         }),
@@ -58,6 +62,7 @@ export function ShotCard({
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? res.statusText);
       setStillUrl(body.still_image_url as string);
+      setClipId(body.clip_id as string);
       setStillStatus("ready");
     } catch (err) {
       setStillError(err instanceof Error ? err.message : String(err));
@@ -66,17 +71,35 @@ export function ShotCard({
   }, [hasImagePrompt, shot, stillStatus]);
 
   const animate = useCallback(async () => {
-    if (!onGenerate || videoBusy) return;
+    if (videoBusy) return;
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate?.([10, 30, 10]);
     }
     setVideoBusy(true);
+    setVideoError(null);
     try {
-      await onGenerate(shot);
+      if (clipId) {
+        // We've got a clip (from Generate still) — animate it in place.
+        const res = await fetch(`/api/clips/${clipId}/animate`, {
+          method: "POST",
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? res.statusText);
+        // The workspace's polling + router.refresh will pick up the
+        // new state automatically.
+      } else if (onGenerate) {
+        // No pre-generated still — fall back to the legacy one-shot
+        // Seedance path the workspace owns.
+        await onGenerate(shot);
+      } else {
+        throw new Error("Nothing to animate — generate a still first.");
+      }
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : String(err));
     } finally {
       setVideoBusy(false);
     }
-  }, [onGenerate, shot, videoBusy]);
+  }, [clipId, onGenerate, shot, videoBusy]);
 
   return (
     <div className="my-4 border border-ink/30 bg-paper">
@@ -211,9 +234,12 @@ export function ShotCard({
             type="button"
             onClick={animate}
             disabled={
-              !onGenerate ||
               videoBusy ||
-              (hasImagePrompt && stillStatus !== "ready")
+              // If this scene has an image_prompt, we need a still before
+              // we can animate. If it doesn't, we rely on the legacy
+              // workspace callback.
+              (hasImagePrompt && stillStatus !== "ready") ||
+              (!hasImagePrompt && !onGenerate)
             }
             className="px-4 py-1.5 bg-ink text-paper font-body text-sm tracking-wide hover:bg-ink-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
@@ -222,12 +248,12 @@ export function ShotCard({
         </div>
       </footer>
 
-      {stillError ? (
+      {stillError || videoError ? (
         <p
           aria-live="polite"
           className="px-4 py-2 font-hand text-red-grease border-t border-ink/20"
         >
-          {stillError}
+          {stillError ?? videoError}
         </p>
       ) : null}
     </div>

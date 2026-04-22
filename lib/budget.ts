@@ -135,19 +135,31 @@ export async function checkRateLimit({
 }
 
 /**
- * Concurrent Replicate predictions in flight. Uses clips rows in
- * 'queued' or 'processing' state.
+ * Concurrent Replicate predictions in flight. Only counts clips that:
+ *   1. Have a replicate_prediction_id (i.e. a VIDEO prediction has
+ *      actually been dispatched — stills-only draft rows don't count).
+ *   2. Were created in the last 10 minutes (stale predictions from
+ *      dev sessions where the webhook never fired don't block new work).
+ *
+ * The cleanup endpoint (/api/clips/cleanup-stuck) handles truly
+ * abandoned clips; this gate just avoids counting them.
  */
+const STALE_THRESHOLD_MS = 10 * 60 * 1000;
+
 export async function checkConcurrentGenerations({
   admin,
 }: {
   admin: SB;
 }): Promise<BudgetCheckResult> {
   const caps = budgetCaps();
+  const cutoff = new Date(Date.now() - STALE_THRESHOLD_MS).toISOString();
+
   const { count, error } = await admin
     .from("clips")
     .select("*", { count: "exact", head: true })
-    .in("status", ["queued", "processing"]);
+    .in("status", ["queued", "processing"])
+    .not("replicate_prediction_id", "is", null)
+    .gte("created_at", cutoff);
 
   if (error) {
     console.warn("checkConcurrentGenerations:", error.message);
@@ -159,7 +171,7 @@ export async function checkConcurrentGenerations({
       code: "concurrent_cap",
       reason: `Already ${count} clip${count === 1 ? "" : "s"} in flight (max ${
         caps.maxConcurrent
-      }). Wait for one to finish.`,
+      }). Wait for one to finish, or tap 'clear stuck' if any have been sitting for more than 10 minutes.`,
     };
   }
   return { ok: true };

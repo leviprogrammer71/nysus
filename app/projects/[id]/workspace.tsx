@@ -319,33 +319,46 @@ function CharacterSheetPanel({
             />
           </div>
         ) : (
-          <ul className="space-y-4">
-            {characters.map((c, i) => (
-              <li key={i} className="space-y-2">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-display text-lg text-ink">
-                    {c.name || `Character ${i + 1}`}
-                  </span>
-                  {c.demeanor ? (
-                    <span className="font-hand text-sm text-ink-soft truncate max-w-[60%] text-right">
-                      {c.demeanor}
+          <ul className="space-y-5">
+            {characters.map((c, i) => {
+              const refCount = c.reference_images?.length ?? 0;
+              return (
+                <li key={i} className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-display text-lg text-ink">
+                      {c.name || `Character ${i + 1}`}
                     </span>
+                    <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60 shrink-0">
+                      {refCount === 0
+                        ? "no refs"
+                        : `${refCount} ${refCount === 1 ? "ref" : "refs"}`}
+                    </span>
+                  </div>
+                  {c.appearance ? (
+                    <p className="font-body text-sm text-ink-soft leading-snug line-clamp-2">
+                      {c.appearance}
+                    </p>
                   ) : null}
-                </div>
-                {c.name?.trim() ? (
-                  <ReferenceStrip
-                    projectId={projectId}
-                    target={`character:${c.name.trim()}`}
-                    label={`${c.name.trim()} references`}
-                    initialPaths={c.reference_images ?? []}
-                  />
-                ) : (
-                  <p className="font-body text-xs text-ink-soft/60 italic">
-                    Give this character a name in edit mode to attach photos.
-                  </p>
-                )}
-              </li>
-            ))}
+                  {c.wardrobe ? (
+                    <p className="font-hand text-sm text-sepia-deep leading-snug line-clamp-1">
+                      {c.wardrobe}
+                    </p>
+                  ) : null}
+                  {c.name?.trim() ? (
+                    <ReferenceStrip
+                      projectId={projectId}
+                      target={`character:${c.name.trim()}`}
+                      label={`${c.name.trim()} references`}
+                      initialPaths={c.reference_images ?? []}
+                    />
+                  ) : (
+                    <p className="font-body text-xs text-ink-soft/60 italic">
+                      Give this character a name in edit mode to attach photos.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

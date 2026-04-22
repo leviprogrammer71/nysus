@@ -1,11 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { deleteProject } from "./actions";
 import { Logomark } from "./components/logomark";
 import { UsageStrip } from "./components/usage-strip";
+import { ProjectCard } from "./components/project-card";
 
-// Home = projects list. Middleware guarantees `user` is present by
+// Home = dashboard. Middleware guarantees `user` is present by
 // the time we get here.
 export default async function HomePage() {
   const supabase = await createClient();
@@ -16,9 +17,6 @@ export default async function HomePage() {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    // Detect the classic "migration never run" error. PostgREST raises
-    // PGRST202 and its message mentions "schema cache" — covering both
-    // lets us survive future phrasing changes.
     const isMissingSchema =
       error.code === "PGRST202" ||
       /schema cache|public\.(projects|clips|messages)/i.test(error.message);
@@ -64,14 +62,9 @@ export default async function HomePage() {
                 from the Nysus repo and hit Run.
               </li>
               <li>
-                Come back here and reload — the projects list will appear.
+                Come back here and reload — the dashboard will appear.
               </li>
             </ol>
-            <p className="font-body text-xs text-ink-soft/70 leading-relaxed pt-2">
-              This creates <code>projects</code>, <code>clips</code>, and{" "}
-              <code>messages</code> tables with row-level security keyed to
-              your user.
-            </p>
           </section>
 
           <div className="mt-6 flex items-center gap-3 flex-wrap">
@@ -90,10 +83,6 @@ export default async function HomePage() {
               Full env checklist
             </a>
           </div>
-
-          <p className="mt-8 font-mono text-[11px] text-ink-soft/60 break-words">
-            {error.message}
-          </p>
         </main>
       );
     }
@@ -105,14 +94,6 @@ export default async function HomePage() {
             Could not load projects.
           </p>
           <p className="font-body text-ink-soft text-sm">{error.message}</p>
-          <form action="/">
-            <button
-              type="submit"
-              className="px-4 h-11 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft transition-colors"
-            >
-              Reload &rarr;
-            </button>
-          </form>
         </div>
       </main>
     );
@@ -120,15 +101,58 @@ export default async function HomePage() {
 
   const hasProjects = projects && projects.length > 0;
 
+  // --- Dashboard stats + thumbnails --------------------------------------
+  //
+  // Fetch aggregate counts and per-project "latest still" thumbnails in
+  // parallel so the dashboard lands fast. Use the service role for the
+  // count queries (so we can use head:true without a fetch round-trip
+  // per row). RLS is redundant here — the user already owns everything
+  // the project list returned.
+  const admin = createServiceRoleClient();
+  const [videoCountR, stillCountR, clipsForThumbsR] = await Promise.all([
+    admin
+      .from("clips")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "complete"),
+    admin
+      .from("clips")
+      .select("*", { count: "exact", head: true })
+      .eq("still_status", "complete"),
+    admin
+      .from("clips")
+      .select("project_id, still_image_url, video_url, status, still_status, order_index, created_at")
+      .order("created_at", { ascending: false })
+      .limit(300),
+  ]);
+
+  const totalProjects = projects?.length ?? 0;
+  const totalVideos = videoCountR.count ?? 0;
+  const totalStills = stillCountR.count ?? 0;
+
+  // Pick the freshest still (falling back to video's mirrored frame)
+  // per project for the card thumbnails.
+  const thumbByProject: Record<string, string | null> = {};
+  for (const c of clipsForThumbsR.data ?? []) {
+    if (!c.project_id) continue;
+    if (thumbByProject[c.project_id]) continue;
+    // Prefer a complete still, then any completed video's implicit
+    // last-frame URL we already cache, then any still in progress.
+    if (c.still_status === "complete" && c.still_image_url) {
+      thumbByProject[c.project_id] = c.still_image_url;
+      continue;
+    }
+  }
+
   return (
-    <main className="min-h-screen flex flex-col px-6 py-10 max-w-2xl mx-auto w-full">
-      <header className="flex items-center justify-between mb-12">
+    <main className="min-h-screen flex flex-col px-6 py-8 max-w-3xl mx-auto w-full">
+      {/* Header */}
+      <header className="flex items-center justify-between mb-6">
         <Link
           href="/"
           className="flex items-center gap-3"
           aria-label="Nysus home"
         >
-          <Logomark size={36} />
+          <Logomark size={36} animated />
           <span className="font-display text-2xl tracking-[0.2em] text-ink">
             NYSUS
           </span>
@@ -147,81 +171,122 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <div className="flex items-end justify-between mb-6">
-        <h1 className="font-display text-4xl text-ink">
-          <span className="highlight">projects</span>
-        </h1>
-        <Link
-          href="/projects/new"
-          className="-mr-2 px-3 py-2 min-h-11 inline-flex items-center font-hand text-xl text-sepia-deep hover:text-ink transition-colors"
-        >
-          + new &rarr;
-        </Link>
-      </div>
-
-      <div className="rule-ink mb-8" />
-
-      {hasProjects ? (
-        <ul className="flex flex-col gap-4">
-          {projects.map((p) => (
-            <li key={p.id} className="group">
-              <div className="flex items-start justify-between gap-4 p-4 bg-paper-deep hover:bg-paper-deep/70 transition-colors">
-                <Link href={`/projects/${p.id}`} className="flex-1 min-w-0">
-                  <h2 className="font-display text-2xl text-ink truncate">
-                    {p.title}
-                  </h2>
-                  {p.description ? (
-                    <p className="font-body text-sm text-ink-soft line-clamp-2 mt-1">
-                      {p.description}
-                    </p>
-                  ) : null}
-                  <p className="font-hand text-base text-sepia-deep mt-2">
-                    updated {new Date(p.updated_at).toLocaleDateString()}
-                  </p>
-                </Link>
-                <form action={deleteProject} className="shrink-0">
-                  <input type="hidden" name="id" value={p.id} />
-                  <button
-                    type="submit"
-                    aria-label={`Delete ${p.title}`}
-                    className="w-11 h-11 inline-flex items-center justify-center text-red-grease hover:text-red-grease/70 font-display text-2xl leading-none opacity-40 sm:opacity-0 group-hover:opacity-100 transition-opacity"
-                    formNoValidate
-                  >
-                    &times;
-                  </button>
-                </form>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="flex flex-col items-center text-center gap-5 py-8">
-          <div className="relative w-full max-w-sm animate-paper-float">
-            <Image
-              src="/illustrations/empty-notebook.png"
-              alt="An open notebook waiting to be filled"
-              width={600}
-              height={400}
-              priority
-              sizes="(max-width: 480px) 90vw, 400px"
-              className="w-full h-auto mix-blend-multiply"
-            />
+      {/* Hero */}
+      <section className="mb-8 pt-2 pb-6 border-b border-ink/10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+          <div className="shrink-0 animate-paper-breath">
+            <Logomark size={120} animated />
           </div>
-          <p className="font-hand text-2xl text-ink-soft">
-            the notebook is empty
-          </p>
-          <p className="font-body text-ink-soft max-w-sm leading-relaxed">
-            Start a new project to begin directing a series. Each project holds
-            its own character sheet, aesthetic bible, and chain of clips.
-          </p>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display text-4xl sm:text-5xl text-ink leading-tight">
+              <span className="highlight">dionysian</span>
+              <br />
+              cinema, by chat.
+            </h1>
+            <p className="font-hand text-lg text-ink-soft mt-3 leading-snug">
+              Dio drafts the scenes, you tap generate. Every still and
+              every clip lives in the same notebook.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Link
+                href="/projects/new"
+                className="px-5 py-2.5 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft transition-colors"
+              >
+                New project &rarr;
+              </Link>
+              {hasProjects ? (
+                <Link
+                  href={`/projects/${projects[0].id}`}
+                  className="px-4 py-2.5 bg-paper border border-ink text-ink font-body tracking-wide hover:bg-paper-deep transition-colors"
+                >
+                  continue {projects[0].title.slice(0, 28)}
+                  {projects[0].title.length > 28 ? "…" : ""} &rarr;
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats strip */}
+      <section className="mb-8 grid grid-cols-3 gap-2">
+        <StatCard label="projects" value={totalProjects} />
+        <StatCard label="stills" value={totalStills} />
+        <StatCard label="videos" value={totalVideos} />
+      </section>
+
+      {/* Projects */}
+      <section className="mb-8">
+        <div className="flex items-end justify-between mb-3">
+          <h2 className="font-display text-2xl text-ink">
+            <span className="highlight">projects</span>
+          </h2>
           <Link
             href="/projects/new"
-            className="px-5 py-2.5 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft transition-colors"
+            className="-mr-2 px-3 py-2 min-h-11 inline-flex items-center font-hand text-lg text-sepia-deep hover:text-ink transition-colors"
           >
-            New project &rarr;
+            + new
           </Link>
         </div>
-      )}
+
+        {hasProjects ? (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {projects.map((p) => (
+              <li key={p.id}>
+                <ProjectCard
+                  id={p.id}
+                  title={p.title}
+                  description={p.description ?? null}
+                  updatedAt={p.updated_at}
+                  thumbUrl={thumbByProject[p.id] ?? null}
+                  onDeleteAction={deleteProject}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="flex flex-col items-center text-center gap-5 py-8">
+            <div className="relative w-full max-w-sm animate-paper-float">
+              <Image
+                src="/illustrations/empty-notebook.png"
+                alt="An open notebook waiting to be filled"
+                width={600}
+                height={400}
+                priority
+                sizes="(max-width: 480px) 90vw, 400px"
+                className="w-full h-auto mix-blend-multiply"
+              />
+            </div>
+            <p className="font-hand text-2xl text-ink-soft">
+              the notebook is empty
+            </p>
+            <p className="font-body text-ink-soft max-w-sm leading-relaxed">
+              Start a new project to begin directing a series. Each project
+              holds its own character sheet, aesthetic bible, and chain of
+              clips.
+            </p>
+            <Link
+              href="/projects/new"
+              className="px-5 py-2.5 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft transition-colors"
+            >
+              New project &rarr;
+            </Link>
+          </div>
+        )}
+      </section>
     </main>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-paper-deep border border-ink/10 px-3 py-3 flex flex-col items-start">
+      <span className="font-display text-3xl text-ink leading-none">
+        {value}
+      </span>
+      <span className="mt-1 font-body text-[10px] uppercase tracking-widest text-ink-soft/70">
+        {label}
+      </span>
+    </div>
   );
 }
