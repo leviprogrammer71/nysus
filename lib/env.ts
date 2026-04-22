@@ -8,12 +8,16 @@
  */
 
 function req(name: string, value: string | undefined, hint?: string): string {
-  if (!value || value.length === 0) {
+  // Trim once on read so any stray whitespace from a copy-paste in
+  // secrets.txt or .env.local can't silently break request URLs and
+  // headers. Supabase URL leading-space bug (Apr 2026) lived here.
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0) {
     throw new Error(
       `Missing env var: ${name}${hint ? ` — ${hint}` : ""}. Check .env.local (see .env.example).`,
     );
   }
-  return value;
+  return trimmed;
 }
 
 export const env = {
