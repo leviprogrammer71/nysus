@@ -11,6 +11,8 @@ import type { TimelineClip } from "./timeline/types";
 import type { ShotPrompt } from "@/lib/shot-prompt";
 import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 import { ReferenceStrip } from "./edit/reference-strip";
+import { ShareButton } from "@/app/components/share-button";
+import { DraftModeToggle } from "@/app/components/draft-mode-toggle";
 
 /**
  * Orchestrates the project workspace: chat, timeline, clip detail.
@@ -197,6 +199,12 @@ export function Workspace({
             edit
           </Link>
           <Link
+            href={`/projects/${projectId}/storyboard`}
+            className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
+          >
+            storyboard
+          </Link>
+          <Link
             href={`/projects/${projectId}/stitch`}
             className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
           >
@@ -222,6 +230,11 @@ export function Workspace({
           {projectDescription}
         </p>
       ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <ShareButton projectId={projectId} />
+        <DraftModeToggle projectId={projectId} />
+      </div>
 
       <div className="rule-ink mt-6 mb-6" />
 

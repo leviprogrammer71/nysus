@@ -20,6 +20,9 @@ export interface TimelineClip {
   still_prompt: string | null;
   still_status: StillStatus;
   still_replicate_prediction_id: string | null;
+  still_approved?: boolean;
   narration: string | null;
+  narration_audio_url?: string | null;
+  captions_srt?: string | null;
   created_at: string;
 }

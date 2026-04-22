@@ -6,8 +6,11 @@ import type { TimelineClip } from "../timeline/types";
 
 /**
  * Drag-to-reorder list of completed clips + "Export MP4" that pulls
- * each signed video URL, hands the blobs to FFmpeg.wasm concat, and
- * triggers a browser download.
+ * each signed video URL, optionally mixes narration audio and burns
+ * captions with FFmpeg.wasm, and triggers a browser download.
+ *
+ * Narration and captions are opt-in toggles because the extra passes
+ * re-encode video and can take noticeably longer on phones.
  */
 export function StitchView({
   clips: initialClips,
@@ -19,6 +22,8 @@ export function StitchView({
   const [clips, setClips] = useState<TimelineClip[]>(initialClips);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [withNarration, setWithNarration] = useState(true);
+  const [withCaptions, setWithCaptions] = useState(true);
 
   const ready = useMemo(
     () => clips.filter((c) => c.status === "complete"),
@@ -27,6 +32,15 @@ export function StitchView({
   const skipped = useMemo(
     () => clips.filter((c) => c.status !== "complete"),
     [clips],
+  );
+
+  const anyNarrationAvailable = useMemo(
+    () => ready.some((c) => c.narration_audio_url),
+    [ready],
+  );
+  const anyCaptionText = useMemo(
+    () => ready.some((c) => (c.narration ?? "").trim().length > 0),
+    [ready],
   );
 
   const move = useCallback((from: number, to: number) => {
@@ -39,30 +53,103 @@ export function StitchView({
     });
   }, []);
 
+  const generateNarration = useCallback(async () => {
+    setError(null);
+    setProgress("synthesizing narration…");
+    try {
+      for (let i = 0; i < ready.length; i++) {
+        const c = ready[i];
+        if (!c.narration || !c.narration.trim()) continue;
+        if (c.narration_audio_url) continue;
+        setProgress(`narrating scene ${i + 1} / ${ready.length}…`);
+        const res = await fetch(`/api/clips/${c.id}/narration`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "TTS failed");
+        setClips((prev) =>
+          prev.map((p) =>
+            p.id === c.id
+              ? { ...p, narration_audio_url: data.narration_audio_url }
+              : p,
+          ),
+        );
+      }
+      setProgress(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setProgress(null);
+    }
+  }, [ready]);
+
   const stitch = useCallback(async () => {
     if (ready.length === 0) return;
     setError(null);
     setProgress("loading ffmpeg…");
 
     try {
-      const { concatMp4s } = await import("@/lib/ffmpeg");
+      const ffmpegLib = await import("@/lib/ffmpeg");
+      const {
+        concatMp4s,
+        mixNarrationOnClip,
+        burnCaptions,
+        probeDurationSec,
+        buildSrtFromClips,
+      } = ffmpegLib;
 
       const blobs: Blob[] = [];
+      const durations: number[] = [];
+
       for (let i = 0; i < ready.length; i++) {
+        const c = ready[i];
         setProgress(`downloading clip ${i + 1} / ${ready.length}…`);
         const signRes = await fetch(
-          `/api/clips/${ready[i].id}/signed-url?kind=video`,
+          `/api/clips/${c.id}/signed-url?kind=video`,
           { cache: "no-store" },
         );
         const signBody = await signRes.json();
         if (!signRes.ok) throw new Error(signBody.error ?? signRes.statusText);
         const vRes = await fetch(signBody.url as string, { cache: "no-store" });
         if (!vRes.ok) throw new Error(`clip ${i + 1} fetch ${vRes.status}`);
-        blobs.push(await vRes.blob());
+        let blob = await vRes.blob();
+
+        if (withNarration && c.narration_audio_url) {
+          setProgress(`mixing narration on clip ${i + 1}…`);
+          const aRes = await fetch(c.narration_audio_url, { cache: "no-store" });
+          if (aRes.ok) {
+            const audio = await aRes.blob();
+            blob = await mixNarrationOnClip({ video: blob, audio });
+          }
+        }
+
+        if (withCaptions) {
+          durations.push(await probeDurationSec(blob));
+        }
+
+        blobs.push(blob);
       }
 
       setProgress("concatenating…");
-      const final = await concatMp4s(blobs);
+      let final = await concatMp4s(blobs);
+
+      if (withCaptions && anyCaptionText) {
+        setProgress("burning captions…");
+        const srt = buildSrtFromClips(
+          ready.map((c, i) => ({
+            text: c.narration,
+            durationSec:
+              durations[i] ??
+              (typeof c.shot_metadata?.duration === "number"
+                ? c.shot_metadata.duration
+                : 5),
+          })),
+        );
+        if (srt.trim()) {
+          final = await burnCaptions({ video: final, srt });
+        }
+      }
 
       setProgress("preparing download…");
       const url = URL.createObjectURL(final);
@@ -82,7 +169,7 @@ export function StitchView({
       setError(msg);
       setProgress(null);
     }
-  }, [ready, projectTitle]);
+  }, [ready, projectTitle, withNarration, withCaptions, anyCaptionText]);
 
   return (
     <div className="space-y-8">
@@ -126,6 +213,7 @@ export function StitchView({
                     <p className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
                       {clip.status}
                       {!isComplete ? " · skipped" : ""}
+                      {clip.narration_audio_url ? " · narrated" : ""}
                     </p>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
@@ -153,6 +241,37 @@ export function StitchView({
             })}
           </ol>
 
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 font-body text-xs text-ink">
+              <input
+                type="checkbox"
+                checked={withNarration}
+                onChange={(e) => setWithNarration(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Mix narration
+              {!anyNarrationAvailable && anyCaptionText ? (
+                <button
+                  type="button"
+                  onClick={generateNarration}
+                  disabled={progress !== null}
+                  className="ml-1 underline underline-offset-2 text-ink-soft hover:text-ink disabled:opacity-50"
+                >
+                  generate
+                </button>
+              ) : null}
+            </label>
+            <label className="inline-flex items-center gap-2 font-body text-xs text-ink">
+              <input
+                type="checkbox"
+                checked={withCaptions}
+                onChange={(e) => setWithCaptions(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Burn captions {anyCaptionText ? "" : "(no narration text yet)"}
+            </label>
+          </div>
+
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="font-hand text-base text-sepia-deep">
               {ready.length} of {clips.length} ready to export
@@ -175,9 +294,9 @@ export function StitchView({
           ) : null}
 
           <p className="font-body text-xs text-ink-soft/60 leading-relaxed">
-            Export runs entirely in your browser via FFmpeg.wasm. Nothing is
-            sent to a server — the signed URLs fetch each clip directly from
-            storage and the concat happens locally.
+            Export runs in your browser via FFmpeg.wasm. Narration audio and
+            captions are mixed locally too — the signed URLs fetch each clip
+            directly from storage.
           </p>
         </>
       )}

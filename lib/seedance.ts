@@ -13,6 +13,10 @@ import type { ShotPrompt } from "@/lib/shot-prompt";
 export const SEEDANCE_MODEL =
   process.env.SEEDANCE_MODEL ?? "bytedance/seedance-1-pro";
 
+/** Cheaper Seedance tier used when the project is in draft mode. */
+export const SEEDANCE_DRAFT_MODEL =
+  process.env.SEEDANCE_DRAFT_MODEL ?? "bytedance/seedance-1-lite";
+
 /**
  * Public shape of the input we pass to Replicate for Seedance.
  * Matches the common ByteDance Seedance-2.0 parameter set:

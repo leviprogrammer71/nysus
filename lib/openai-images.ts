@@ -49,12 +49,15 @@ export async function generateOpenAIImage({
   prompt,
   aspect_ratio,
   signal,
+  draft = false,
 }: {
   prompt: string;
   aspect_ratio: string;
   signal?: AbortSignal;
+  /** Drop quality to "low" and force 1024x1024 for cheap iteration. */
+  draft?: boolean;
 }): Promise<GeneratedImage> {
-  const size = openAiSize(aspect_ratio);
+  const size = draft ? ("1024x1024" as const) : openAiSize(aspect_ratio);
   const [w, h] = size.split("x").map(Number);
 
   const response = await fetch("https://api.openai.com/v1/images/generations", {
@@ -67,7 +70,7 @@ export async function generateOpenAIImage({
       model: OPENAI_IMAGE_MODEL,
       prompt,
       size,
-      quality: OPENAI_IMAGE_QUALITY,
+      quality: draft ? "low" : OPENAI_IMAGE_QUALITY,
       n: 1,
     }),
     signal,

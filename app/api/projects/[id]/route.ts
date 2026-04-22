@@ -20,10 +20,35 @@ const patchSchema = z
       .transform((v) => (v === undefined ? undefined : v.length > 0 ? v : null)),
     character_sheet: z.unknown().optional(),
     aesthetic_bible: z.unknown().optional(),
+    draft_mode: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "No fields to update",
   });
+
+/**
+ * GET /api/projects/[id] — returns a narrow project row for UI
+ * toggles (draft mode, share state). RLS-gated so only the owner
+ * can read.
+ */
+export async function GET(_req: NextRequest, { params }: Params) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!isAuthenticated(user)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+  }
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, title, description, draft_mode, share_token, share_enabled, updated_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(data);
+}
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params;
@@ -51,6 +76,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     description?: string | null;
     character_sheet?: CharacterSheet;
     aesthetic_bible?: AestheticBible;
+    draft_mode?: boolean;
   } = {};
   if (body.title !== undefined) update.title = body.title;
   if (body.description !== undefined) update.description = body.description;
@@ -58,6 +84,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     update.character_sheet = body.character_sheet as CharacterSheet;
   if (body.aesthetic_bible !== undefined)
     update.aesthetic_bible = body.aesthetic_bible as AestheticBible;
+  if (body.draft_mode !== undefined) update.draft_mode = body.draft_mode;
 
   const { data, error } = await supabase
     .from("projects")

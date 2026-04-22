@@ -12,7 +12,14 @@ import { isSupabaseConfigured } from "@/lib/env";
  *   /api/health  health probe
  */
 const PUBLIC_EXACT = new Set<string>(["/", "/login", "/setup"]);
-const PUBLIC_PREFIXES = ["/auth/", "/login/", "/setup/", "/api/health"];
+const PUBLIC_PREFIXES = [
+  "/auth/",
+  "/login/",
+  "/setup/",
+  "/api/health",
+  "/share/",
+  "/sw.js",
+];
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_EXACT.has(pathname)) return true;

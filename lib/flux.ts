@@ -11,6 +11,10 @@ import { z } from "zod";
 export const FLUX_MODEL =
   process.env.FLUX_MODEL ?? "black-forest-labs/flux-1.1-pro";
 
+/** Cheaper/faster Flux variant used when a project is in draft mode. */
+export const FLUX_DRAFT_MODEL =
+  process.env.FLUX_DRAFT_MODEL ?? "black-forest-labs/flux-schnell";
+
 export const fluxInputSchema = z.object({
   prompt: z.string().min(1).max(4000),
   aspect_ratio: z

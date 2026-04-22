@@ -7,7 +7,7 @@ import {
   fetchReplicateOutputAsBlob,
   getPrediction,
 } from "@/lib/replicate";
-import { fluxInputSchema, FLUX_MODEL } from "@/lib/flux";
+import { fluxInputSchema, FLUX_MODEL, FLUX_DRAFT_MODEL } from "@/lib/flux";
 import {
   generateOpenAIImage,
   hasOpenAIImageKey,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id")
+    .select("id, draft_mode")
     .eq("id", body.project_id)
     .maybeSingle();
   if (projectError || !project) {
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       { status: 404 },
     );
   }
+  const draft = Boolean(project.draft_mode);
 
   const admin = createServiceRoleClient();
   const gate = await checkSpendCap({
@@ -173,7 +174,11 @@ export async function POST(request: NextRequest) {
   // --- Generate via OpenAI or Flux ------------------------------------
   const useOpenAI = hasOpenAIImageKey();
   const provider: "openai" | "flux" = useOpenAI ? "openai" : "flux";
-  const modelSlug = useOpenAI ? OPENAI_IMAGE_MODEL : FLUX_MODEL;
+  const modelSlug = useOpenAI
+    ? OPENAI_IMAGE_MODEL
+    : draft
+    ? FLUX_DRAFT_MODEL
+    : FLUX_MODEL;
 
   try {
     let imageBlob: Blob;
@@ -184,6 +189,7 @@ export async function POST(request: NextRequest) {
       const img = await generateOpenAIImage({
         prompt: imagePrompt,
         aspect_ratio: aspectRatio,
+        draft,
       });
       imageBlob = img.blob;
       imageContentType = img.contentType;
@@ -191,9 +197,10 @@ export async function POST(request: NextRequest) {
       const inputValidated = fluxInputSchema.parse({
         prompt: imagePrompt,
         aspect_ratio: aspectRatio,
+        ...(draft ? { output_quality: 80 } : {}),
       });
       const prediction = await createPrediction({
-        model: FLUX_MODEL,
+        model: modelSlug,
         input: inputValidated,
       });
       predictionId = prediction.id;
@@ -276,6 +283,7 @@ export async function POST(request: NextRequest) {
         model: modelSlug,
         kind: "still",
         image_provider: provider,
+        draft,
       },
     });
 

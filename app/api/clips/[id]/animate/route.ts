@@ -3,10 +3,11 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { createPrediction } from "@/lib/replicate";
-import { buildSeedanceInput, SEEDANCE_MODEL } from "@/lib/seedance";
+import { buildSeedanceInput, SEEDANCE_MODEL, SEEDANCE_DRAFT_MODEL } from "@/lib/seedance";
 import { buildKlingInput, KLING_MODEL } from "@/lib/kling";
 import { shotPromptSchema } from "@/lib/shot-prompt";
 import { gateGeneration, recordUsage } from "@/lib/budget";
+import { resolvePriorLastFrame } from "@/lib/frame-chain";
 import type { AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -86,10 +87,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
   // fires for stylized / 3D aesthetics.
   const { data: project } = await admin
     .from("projects")
-    .select("aesthetic_bible")
+    .select("aesthetic_bible, draft_mode")
     .eq("id", clip.project_id)
     .single();
   const bible = (project?.aesthetic_bible ?? {}) as AestheticBible;
+  const draft = Boolean(project?.draft_mode);
   const styleText = [bible.visual_style ?? "", bible.palette ?? ""]
     .join(" ")
     .toLowerCase();
@@ -99,7 +101,24 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const requested = shot.animation_model ?? "seedance";
   const model: "seedance" | "kling" = looksRealistic ? "seedance" : requested;
 
-  const seedUrl = clip.still_image_url ?? clip.seed_image_url;
+  // Seed priority:
+  //   1. the clip's own still (storyboard-first workflow)
+  //   2. a user-supplied seed_image_url
+  //   3. the previous clip's last frame (frame chaining — the big
+  //      continuity lever)
+  let seedUrl = clip.still_image_url ?? clip.seed_image_url;
+  let seedFromChain = false;
+  if (!seedUrl) {
+    const chained = await resolvePriorLastFrame({
+      admin,
+      projectId: clip.project_id,
+      currentOrderIndex: clip.order_index,
+    });
+    if (chained) {
+      seedUrl = chained;
+      seedFromChain = true;
+    }
+  }
 
   const webhookUrl =
     `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/replicate/webhook` +
@@ -118,7 +137,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
         webhook_events_filter: ["completed"],
       });
     } else {
-      modelSlug = SEEDANCE_MODEL;
+      modelSlug = draft ? SEEDANCE_DRAFT_MODEL : SEEDANCE_MODEL;
       const input = buildSeedanceInput({ shot, seedImageUrl: seedUrl });
       prediction = await createPrediction({
         model: modelSlug,
@@ -156,6 +175,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
         model: modelSlug,
         animation_model: model,
         animated_from_still: Boolean(clip.still_image_url),
+        seed_from_chain: seedFromChain,
+        draft,
         forced_realistic: looksRealistic && requested !== "seedance",
       },
     });
@@ -167,6 +188,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       status: prediction.status,
       model,
       model_slug: modelSlug,
+      seed_from_chain: seedFromChain,
       forced_realistic: looksRealistic && requested !== "seedance",
     });
   } catch (err) {

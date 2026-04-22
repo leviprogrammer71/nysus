@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { isPremiumEmail } from "@/lib/auth";
+import { sumOverridesForDay, sumOverridesForMonth } from "@/lib/overrides";
 
 type SB = SupabaseClient<Database>;
 
@@ -81,7 +82,7 @@ export async function checkSpendCap({
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
-  const [daily, monthly] = await Promise.all([
+  const [daily, monthly, dayOverrideCents, monthOverrideCents] = await Promise.all([
     admin
       .from("usage")
       .select("cost_usd_cents")
@@ -92,6 +93,8 @@ export async function checkSpendCap({
       .select("cost_usd_cents")
       .eq("user_id", userId)
       .gte("created_at", monthStart.toISOString()),
+    sumOverridesForDay({ admin, userId }),
+    sumOverridesForMonth({ admin, userId }),
   ]);
 
   const sum = (rows: { cost_usd_cents: number }[] | null | undefined) =>
@@ -99,23 +102,25 @@ export async function checkSpendCap({
 
   const dayTotal = sum(daily.data);
   const monthTotal = sum(monthly.data);
+  const effectiveDailyCap = caps.maxDailyCents + dayOverrideCents;
+  const effectiveMonthlyCap = caps.maxMonthlyCents + monthOverrideCents;
 
-  if (dayTotal + estimateCents > caps.maxDailyCents) {
+  if (dayTotal + estimateCents > effectiveDailyCap) {
     return {
       ok: false,
       code: "daily_cap",
-      reason: `Daily spend cap reached ($${(caps.maxDailyCents / 100).toFixed(
+      reason: `Daily spend cap reached ($${(effectiveDailyCap / 100).toFixed(
         2,
-      )}). Raise MAX_DAILY_USD if you mean to go higher.`,
+      )}). Add $ via the top-up button, or raise MAX_DAILY_USD.`,
     };
   }
-  if (monthTotal + estimateCents > caps.maxMonthlyCents) {
+  if (monthTotal + estimateCents > effectiveMonthlyCap) {
     return {
       ok: false,
       code: "monthly_cap",
-      reason: `Monthly spend cap reached ($${(caps.maxMonthlyCents / 100).toFixed(
+      reason: `Monthly spend cap reached ($${(effectiveMonthlyCap / 100).toFixed(
         2,
-      )}). Raise MAX_MONTHLY_USD if you mean to go higher.`,
+      )}). Add $ via the top-up button, or raise MAX_MONTHLY_USD.`,
     };
   }
   return { ok: true };

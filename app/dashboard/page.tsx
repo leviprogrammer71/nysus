@@ -4,6 +4,8 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { deleteProject } from "@/app/actions";
 import { Logomark } from "@/app/components/logomark";
 import { UsageStrip } from "@/app/components/usage-strip";
+import { UsageMeter } from "@/app/components/usage-meter";
+import { PushOptIn } from "@/app/components/push-optin";
 import { ProjectCard } from "@/app/components/project-card";
 import { ShowcaseStrip } from "@/app/components/showcase-strip";
 import { loadShowcase } from "@/lib/showcase";
@@ -210,6 +212,10 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Usage meter + push opt-in */}
+      <PushOptIn />
+      <UsageMeter />
 
       {/* Stats strip */}
       <section className="mb-8 grid grid-cols-3 gap-2">

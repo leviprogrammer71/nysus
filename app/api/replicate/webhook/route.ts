@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { mirrorPredictionToClip } from "@/lib/clips";
+import { sendPushToUser } from "@/lib/push";
 import type { Prediction } from "@/lib/replicate";
 
 export const runtime = "nodejs";
@@ -62,6 +63,31 @@ export async function POST(request: NextRequest) {
       projectId: clip.project_id,
       prediction: payload,
     });
+
+    // Fire a push if the clip just finished. We look up the project
+    // owner to route the notification. Best-effort — don't block the
+    // webhook response on it.
+    if (result.kind === "complete" || result.kind === "failed") {
+      const { data: proj } = await admin
+        .from("projects")
+        .select("user_id, title")
+        .eq("id", clip.project_id)
+        .maybeSingle();
+      if (proj?.user_id) {
+        void sendPushToUser({
+          admin,
+          userId: proj.user_id,
+          title: result.kind === "complete" ? "Clip ready" : "Clip failed",
+          body:
+            result.kind === "complete"
+              ? `A scene in "${proj.title}" just finished rendering.`
+              : `A scene in "${proj.title}" failed: ${result.error.slice(0, 120)}`,
+          url: `/projects/${clip.project_id}`,
+          tag: `clip-${clip.id}`,
+        });
+      }
+    }
+
     return NextResponse.json({ ok: true, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

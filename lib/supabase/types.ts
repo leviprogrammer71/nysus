@@ -57,6 +57,9 @@ type ProjectsTable = {
     description: string | null;
     character_sheet: CharacterSheet;
     aesthetic_bible: AestheticBible;
+    draft_mode: boolean;
+    share_token: string | null;
+    share_enabled: boolean;
     created_at: string;
     updated_at: string;
   };
@@ -67,6 +70,9 @@ type ProjectsTable = {
     description?: string | null;
     character_sheet?: CharacterSheet;
     aesthetic_bible?: AestheticBible;
+    draft_mode?: boolean;
+    share_token?: string | null;
+    share_enabled?: boolean;
     created_at?: string;
     updated_at?: string;
   };
@@ -77,6 +83,9 @@ type ProjectsTable = {
     description?: string | null;
     character_sheet?: CharacterSheet;
     aesthetic_bible?: AestheticBible;
+    draft_mode?: boolean;
+    share_token?: string | null;
+    share_enabled?: boolean;
     created_at?: string;
     updated_at?: string;
   };
@@ -104,6 +113,10 @@ type ClipsTable = {
     still_status: StillStatus;
     still_replicate_prediction_id: string | null;
     narration: string | null;
+    narration_audio_url: string | null;
+    narration_model: string | null;
+    captions_srt: string | null;
+    still_approved: boolean;
     created_at: string;
   };
   Insert: {
@@ -125,6 +138,10 @@ type ClipsTable = {
     still_status?: StillStatus;
     still_replicate_prediction_id?: string | null;
     narration?: string | null;
+    narration_audio_url?: string | null;
+    narration_model?: string | null;
+    captions_srt?: string | null;
+    still_approved?: boolean;
     created_at?: string;
   };
   Update: {
@@ -146,6 +163,10 @@ type ClipsTable = {
     still_status?: StillStatus;
     still_replicate_prediction_id?: string | null;
     narration?: string | null;
+    narration_audio_url?: string | null;
+    narration_model?: string | null;
+    captions_srt?: string | null;
+    still_approved?: boolean;
     created_at?: string;
   };
   Relationships: [
@@ -238,6 +259,79 @@ type MessagesTable = {
   ];
 };
 
+type UserBudgetOverrideScope = "day" | "month";
+
+type UserBudgetOverridesTable = {
+  Row: {
+    id: string;
+    user_id: string;
+    scope: UserBudgetOverrideScope;
+    period: string;
+    extra_cents: number;
+    stripe_session_id: string | null;
+    stripe_payment_intent_id: string | null;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+  Insert: {
+    id?: string;
+    user_id: string;
+    scope?: UserBudgetOverrideScope;
+    period: string;
+    extra_cents: number;
+    stripe_session_id?: string | null;
+    stripe_payment_intent_id?: string | null;
+    metadata?: Record<string, unknown>;
+    created_at?: string;
+  };
+  Update: {
+    id?: string;
+    user_id?: string;
+    scope?: UserBudgetOverrideScope;
+    period?: string;
+    extra_cents?: number;
+    stripe_session_id?: string | null;
+    stripe_payment_intent_id?: string | null;
+    metadata?: Record<string, unknown>;
+    created_at?: string;
+  };
+  Relationships: [];
+};
+
+type PushSubscriptionsTable = {
+  Row: {
+    id: string;
+    user_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    user_agent: string | null;
+    created_at: string;
+    last_used_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    user_id: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    user_agent?: string | null;
+    created_at?: string;
+    last_used_at?: string | null;
+  };
+  Update: {
+    id?: string;
+    user_id?: string;
+    endpoint?: string;
+    p256dh?: string;
+    auth?: string;
+    user_agent?: string | null;
+    created_at?: string;
+    last_used_at?: string | null;
+  };
+  Relationships: [];
+};
+
 export interface Database {
   // Discriminator consumed by @supabase/supabase-js to infer PostgREST version.
   __InternalSupabase: {
@@ -249,6 +343,8 @@ export interface Database {
       clips: ClipsTable;
       messages: MessagesTable;
       usage: UsageTable;
+      user_budget_overrides: UserBudgetOverridesTable;
+      push_subscriptions: PushSubscriptionsTable;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
