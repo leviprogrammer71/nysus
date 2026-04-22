@@ -225,7 +225,7 @@ export function SeedPicker({
         className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
       />
 
-      <div className="relative w-full sm:max-w-xl bg-paper border-t sm:border border-ink/20 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full sm:max-w-xl bg-paper border-t sm:border border-ink/20 max-h-[92vh] overflow-y-auto pb-safe">
         <header className="sticky top-0 bg-paper/95 backdrop-blur flex items-center justify-between px-5 py-3 border-b border-ink/10">
           <div className="font-hand text-xl text-ink">change seed frame</div>
           <button

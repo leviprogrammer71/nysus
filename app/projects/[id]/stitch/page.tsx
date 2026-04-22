@@ -32,9 +32,9 @@ export default async function StitchPage({ params }: PageProps) {
       <header className="flex items-center justify-between mb-8">
         <Link
           href={`/projects/${project.id}`}
-          className="font-hand text-lg text-sepia-deep hover:text-ink transition-colors"
+          className="-ml-2 px-2 py-2 font-hand text-lg text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
         >
-          &larr; back to workspace
+          &larr; workspace
         </Link>
       </header>
 

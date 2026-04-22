@@ -69,7 +69,7 @@ export function ScriptModeOverlay({
       aria-label="Script mode"
       className="fixed inset-0 z-[60] bg-paper flex flex-col"
     >
-      <header className="flex items-center justify-between px-5 py-3 border-b border-ink/10">
+      <header className="flex items-center justify-between px-5 py-3 pt-safe border-b border-ink/10">
         <div className="flex items-center gap-3">
           <span
             className={`w-2 h-2 rounded-full ${
@@ -125,7 +125,7 @@ export function ScriptModeOverlay({
       </div>
 
       {/* Footer controls */}
-      <footer className="border-t border-ink/10 px-5 py-4 flex items-center gap-3 justify-between">
+      <footer className="border-t border-ink/10 px-5 py-4 pb-safe-plus-4 flex items-center gap-3 justify-between">
         <div className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
           say <span className="font-hand text-sm normal-case text-ink-soft">new shot</span>
           {" · "}

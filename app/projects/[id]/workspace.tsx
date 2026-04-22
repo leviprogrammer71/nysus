@@ -171,30 +171,31 @@ export function Workspace({
 
   return (
     <main className="min-h-screen flex flex-col px-4 sm:px-6 py-8 max-w-3xl mx-auto w-full">
-      <header className="flex items-center justify-between mb-8">
+      <header className="flex items-center justify-between mb-6 gap-2">
         <Link
           href="/"
-          className="font-hand text-lg text-sepia-deep hover:text-ink transition-colors"
+          className="-ml-2 px-2 py-2 font-hand text-lg text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
         >
-          &larr; all projects
+          &larr; projects
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 sm:gap-3">
           <Link
             href={`/projects/${projectId}/edit`}
-            className="font-hand text-sm text-sepia-deep hover:text-ink transition-colors"
+            className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
           >
             edit
           </Link>
           <Link
             href={`/projects/${projectId}/stitch`}
-            className="font-hand text-sm text-sepia-deep hover:text-ink transition-colors"
+            className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
           >
             stitch &rarr;
           </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="font-body text-xs uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
+              aria-label="Sign out"
+              className="px-2 py-2 min-h-11 font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
             >
               sign out
             </button>

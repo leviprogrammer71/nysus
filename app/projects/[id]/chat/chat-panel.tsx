@@ -168,7 +168,7 @@ export function ChatPanel({
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex flex-col bg-paper-deep border border-ink/10 h-[min(70vh,720px)]">
+    <div className="flex flex-col bg-paper-deep border border-ink/10 h-[min(70svh,720px)]">
       <div
         ref={scrollerRef}
         className="flex-1 overflow-y-auto px-5 py-6 space-y-6 scroll-smooth"
@@ -202,7 +202,7 @@ export function ChatPanel({
           e.preventDefault();
           void send();
         }}
-        className="border-t border-ink/10 bg-paper px-4 py-3"
+        className="border-t border-ink/10 bg-paper px-4 py-3 pb-safe-plus-3"
       >
         <div className="flex items-end gap-3">
           <button

@@ -134,7 +134,7 @@ export function StitchView({
                       aria-label="Move up"
                       onClick={() => move(i, i - 1)}
                       disabled={i === 0}
-                      className="w-7 h-6 font-mono text-xs border border-ink/30 hover:border-ink disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="w-11 h-9 font-mono text-base border border-ink/30 hover:border-ink disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                     >
                       ↑
                     </button>
@@ -143,7 +143,7 @@ export function StitchView({
                       aria-label="Move down"
                       onClick={() => move(i, i + 1)}
                       disabled={i === clips.length - 1}
-                      className="w-7 h-6 font-mono text-xs border border-ink/30 hover:border-ink disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="w-11 h-9 font-mono text-base border border-ink/30 hover:border-ink disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                     >
                       ↓
                     </button>

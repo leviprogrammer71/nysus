@@ -15,7 +15,7 @@ export default function LoginPage() {
             NYSUS
           </h1>
           <p className="font-hand text-lg text-ink-soft">
-            sign in to the <span className="highlight">notebook</span>
+            open the <span className="highlight">notebook</span>
           </p>
         </header>
 

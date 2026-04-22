@@ -1,12 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
-import { sendMagicLink } from "./actions";
+import { signIn } from "./actions";
 
 const initialState = { ok: false, message: "" };
 
 export function LoginForm() {
-  const [state, formAction, pending] = useActionState(sendMagicLink, initialState);
+  const [state, formAction, pending] = useActionState(signIn, initialState);
 
   return (
     <form action={formAction} className="w-full flex flex-col gap-4">
@@ -20,7 +20,21 @@ export function LoginForm() {
           autoComplete="email"
           inputMode="email"
           placeholder="you@example.com"
-          className="w-full px-4 py-3 bg-paper-deep border border-ink/20 rounded-none font-body text-ink focus:outline-none focus:border-ink placeholder:text-ink-soft/40 transition-colors"
+          className="w-full h-12 px-4 bg-paper-deep border border-ink/20 rounded-none font-body text-ink focus:outline-none focus:border-ink placeholder:text-ink-soft/40 transition-colors"
+          disabled={pending}
+        />
+      </label>
+
+      <label className="flex flex-col gap-2">
+        <span className="font-hand text-sepia-deep text-base">password</span>
+        <input
+          type="password"
+          name="password"
+          required
+          autoComplete="current-password"
+          minLength={6}
+          placeholder="at least 6 characters"
+          className="w-full h-12 px-4 bg-paper-deep border border-ink/20 rounded-none font-body text-ink focus:outline-none focus:border-ink placeholder:text-ink-soft/40 transition-colors"
           disabled={pending}
         />
       </label>
@@ -28,9 +42,9 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full px-4 py-3 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft disabled:opacity-60 disabled:cursor-wait transition-colors text-left flex justify-between items-center"
+        className="w-full h-12 px-4 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft disabled:opacity-60 disabled:cursor-wait transition-colors text-left flex justify-between items-center"
       >
-        <span>{pending ? "Sending…" : "Send magic link"}</span>
+        <span>{pending ? "Signing in…" : "Sign in"}</span>
         <span aria-hidden>&rarr;</span>
       </button>
 
@@ -46,9 +60,10 @@ export function LoginForm() {
       ) : null}
 
       <p className="font-body text-xs text-ink-soft/60 leading-relaxed">
-        A one-time sign-in link will be sent to your email. This app is
-        single-user &mdash; only the address configured as{" "}
+        This app is single-user. Only the email configured as{" "}
         <code className="font-mono text-[11px]">ALLOWED_EMAIL</code> can sign in.
+        First sign-in sets your password; later sign-ins validate it. No emails
+        are ever sent.
       </p>
     </form>
   );

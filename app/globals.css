@@ -194,3 +194,19 @@ body {
     animation: none;
   }
 }
+
+/*
+  iOS safe-area utilities — used by the chat input bar and any fixed
+  bottom sheet so the bottom padding dodges the home indicator.
+  Tailwind v4 doesn't ship these by default; keeping them small and
+  explicit instead of pulling a plugin.
+*/
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top:    env(safe-area-inset-top);    }
+.pl-safe { padding-left:   env(safe-area-inset-left);   }
+.pr-safe { padding-right:  env(safe-area-inset-right);  }
+.pb-safe-plus-3 { padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem); }
+.pb-safe-plus-4 { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);    }
+.min-h-safe-screen {
+  min-height: calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
