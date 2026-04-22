@@ -1,4 +1,4 @@
-import type { ClipStatus, SeedSource } from "@/lib/supabase/types";
+import type { ClipStatus, SeedSource, StillStatus } from "@/lib/supabase/types";
 import type { ShotPromptMetadata } from "@/lib/shot-prompt";
 
 export interface TimelineClip {
@@ -15,5 +15,11 @@ export interface TimelineClip {
   status: ClipStatus;
   replicate_prediction_id: string | null;
   error_message: string | null;
+  // Stills pipeline
+  still_image_url: string | null;
+  still_prompt: string | null;
+  still_status: StillStatus;
+  still_replicate_prediction_id: string | null;
+  narration: string | null;
   created_at: string;
 }

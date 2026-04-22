@@ -6,6 +6,7 @@ import { MessageBubble, type ChatMessage } from "./message";
 import type { ShotPrompt } from "@/lib/shot-prompt";
 import { useDictation } from "@/lib/use-dictation";
 import { ScriptModeOverlay } from "./script-mode-overlay";
+import { Logomark } from "@/app/components/logomark";
 
 export function ChatPanel({
   projectId,
@@ -319,25 +320,7 @@ export function ChatPanel({
             <MessageBubble key={m.id} message={m} onGenerate={onGenerate} />
           ))
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 font-hand text-sepia-deep text-base">
-              <span>the director</span>
-            </div>
-            <div className="font-body text-ink space-y-3 leading-relaxed">
-              <p>
-                Tell me the story &mdash; a sentence is enough. I can draft the
-                cast, the aesthetic bible, and the opening shot from that.
-              </p>
-              <p>
-                If you&rsquo;d rather do the specifics yourself, the{" "}
-                <span className="font-hand text-sepia-deep">edit</span> page is
-                up top. Either way, this chat is where everything happens.
-              </p>
-              <p className="font-hand text-ink-soft">
-                what are we making?
-              </p>
-            </div>
-          </div>
+          <DioGreeting />
         )}
 
         {error ? (
@@ -571,6 +554,43 @@ export function ChatPanel({
           void sendText(text, { source: "voice" });
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Pre-first-message greeting. Dio introduces himself with the
+ * animated logomark. This is the "reflection" — every time you see
+ * Dio, his mark moves.
+ */
+function DioGreeting() {
+  return (
+    <div className="flex gap-3">
+      <div className="shrink-0 mt-0.5">
+        <Logomark size={28} animated />
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center gap-2 mb-2 font-hand text-sepia-deep text-base">
+          <span>Dio</span>
+        </div>
+        <div className="font-body text-ink space-y-3 leading-relaxed">
+          <p>
+            I&rsquo;m Dio &mdash; your director. Tell me the story, a sentence
+            is enough. I&rsquo;ll draft the cast, the aesthetic bible, and the
+            first few scenes from it.
+          </p>
+          <p>
+            Each scene gives you an{" "}
+            <span className="font-hand text-sepia-deep">image prompt</span>,
+            an{" "}
+            <span className="font-hand text-sepia-deep">animation prompt</span>,
+            and the{" "}
+            <span className="font-hand text-sepia-deep">narration</span>. You
+            pick what to generate, when.
+          </p>
+          <p className="font-hand text-ink-soft">what are we making?</p>
+        </div>
+      </div>
     </div>
   );
 }

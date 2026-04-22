@@ -31,7 +31,7 @@ export default async function ProjectPage({ params }: PageProps) {
     supabase
       .from("clips")
       .select(
-        "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, created_at",
+        "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration, created_at",
       )
       .eq("project_id", project.id)
       .order("order_index", { ascending: true }),

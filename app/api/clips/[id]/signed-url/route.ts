@@ -20,6 +20,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const kind = (new URL(request.url).searchParams.get("kind") ?? "video") as
     | "video"
+    | "still"
     | "last_frame"
     | "sampled_0"
     | "sampled_1"
@@ -44,6 +45,8 @@ export async function GET(request: NextRequest, { params }: Params) {
   const path =
     kind === "video"
       ? `${clip.project_id}/${clip.id}/video.mp4`
+      : kind === "still"
+      ? `${clip.project_id}/stills/${clip.id}/image.png`
       : kind === "last_frame"
       ? `${clip.project_id}/${clip.id}/last.jpg`
       : kind === "sampled_0"

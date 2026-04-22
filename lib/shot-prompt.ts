@@ -15,7 +15,25 @@ export const shotPromptSchema = z.object({
   shot_type: z.literal("shot_prompt"),
   shot_number: z.number().int().positive(),
   duration: z.number().int().min(5).max(30).default(15),
+  /**
+   * Video / animation prompt — what Seedance sees when it animates
+   * the still. Describe motion, pacing, camera, beat.
+   */
   prompt: z.string().min(1),
+  /**
+   * Optional still-generation prompt — fed to the image model
+   * (Flux by default) to produce the seed frame for this scene.
+   * When present, the user generates the still first, then animates
+   * from it. When absent, we go straight to Seedance with whatever
+   * seed is supplied.
+   */
+  image_prompt: z.string().optional().default(""),
+  /**
+   * Optional voiceover text for this scene. Not generated
+   * automatically yet — surfaced on the shot card for copy/paste
+   * into whatever VO tool the user likes.
+   */
+  narration: z.string().optional().default(""),
   continuity_notes: z.string().optional().default(""),
   voice_direction: z.string().optional().default(""),
   suggested_seed_behavior: z

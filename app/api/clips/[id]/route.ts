@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { data: clip, error } = await supabase
     .from("clips")
     .select(
-      "id, project_id, order_index, prompt, status, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, replicate_prediction_id, error_message, created_at, shot_metadata",
+      "id, project_id, order_index, prompt, status, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, replicate_prediction_id, error_message, created_at, shot_metadata, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration",
     )
     .eq("id", id)
     .maybeSingle();
@@ -99,7 +99,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       const { data: refreshed } = await supabase
         .from("clips")
         .select(
-          "id, project_id, order_index, prompt, status, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, replicate_prediction_id, error_message, created_at, shot_metadata",
+          "id, project_id, order_index, prompt, status, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, replicate_prediction_id, error_message, created_at, shot_metadata, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration",
         )
         .eq("id", id)
         .single();

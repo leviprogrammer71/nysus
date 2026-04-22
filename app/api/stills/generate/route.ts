@@ -1,0 +1,321 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { isAllowedEmail } from "@/lib/auth";
+import { env } from "@/lib/env";
+import {
+  createPrediction,
+  fetchReplicateOutputAsBlob,
+  getPrediction,
+} from "@/lib/replicate";
+import { fluxInputSchema, FLUX_MODEL } from "@/lib/flux";
+import { shotPromptSchema } from "@/lib/shot-prompt";
+import {
+  checkSpendCap,
+  ESTIMATE_CENTS_PER_GENERATION,
+  recordUsage,
+} from "@/lib/budget";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+const bodySchema = z.object({
+  project_id: z.string().uuid(),
+  /**
+   * Either a pre-existing clip id (resume / regenerate still for a
+   * scene Dio already drafted) or the full shot packet to create a
+   * new clip row for.
+   */
+  clip_id: z.string().uuid().optional(),
+  shot: shotPromptSchema.optional(),
+  image_prompt: z.string().min(1).max(4000).optional(),
+  aspect_ratio: z
+    .enum(["9:16", "16:9", "1:1", "4:3", "3:4", "21:9"])
+    .optional(),
+});
+
+/**
+ * POST /api/stills/generate
+ *
+ * Creates (or resumes) a Replicate Flux prediction for a scene's
+ * still image. On completion the output is mirrored into Storage at
+ * {project}/stills/{clip}/image.png and clip.still_image_url is set.
+ *
+ * Flow:
+ *   - If clip_id present: regenerate the still for that scene.
+ *   - Else: create a new clip row with still_prompt + prompt + narration
+ *     from the shot packet and kick off the still.
+ *
+ * Because Flux is fast (~5-10s) and we don't set up a webhook for
+ * images, the response is blocking — we wait for the prediction and
+ * return the signed URL. The gate against budget happens before we
+ * create the prediction.
+ */
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isAllowedEmail(user.email)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+  }
+
+  let body: z.infer<typeof bodySchema>;
+  try {
+    body = bodySchema.parse(await request.json());
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Invalid payload" },
+      { status: 400 },
+    );
+  }
+
+  // RLS-gated project read.
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", body.project_id)
+    .maybeSingle();
+  if (projectError || !project) {
+    return NextResponse.json(
+      { error: projectError?.message ?? "Project not found" },
+      { status: 404 },
+    );
+  }
+
+  // Budget gate — use the same conservative estimate as generation;
+  // Flux is usually cheaper but we'd rather round up than under.
+  const admin = createServiceRoleClient();
+  const gate = await checkSpendCap({
+    admin,
+    estimateCents: ESTIMATE_CENTS_PER_GENERATION,
+  });
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: gate.reason, code: gate.code },
+      { status: 429 },
+    );
+  }
+
+  // Resolve the clip row (create if needed).
+  let clipId: string;
+  let imagePrompt: string;
+  let aspectRatio: z.infer<typeof fluxInputSchema>["aspect_ratio"];
+
+  if (body.clip_id) {
+    const { data: existing, error: readErr } = await supabase
+      .from("clips")
+      .select("id, still_prompt, prompt, shot_metadata")
+      .eq("id", body.clip_id)
+      .maybeSingle();
+    if (readErr || !existing) {
+      return NextResponse.json(
+        { error: readErr?.message ?? "Clip not found" },
+        { status: 404 },
+      );
+    }
+    clipId = existing.id;
+    imagePrompt = body.image_prompt ?? existing.still_prompt ?? existing.prompt;
+    aspectRatio = body.aspect_ratio ?? "9:16";
+  } else {
+    const shot = body.shot;
+    if (!shot) {
+      return NextResponse.json(
+        { error: "Provide either clip_id or shot." },
+        { status: 400 },
+      );
+    }
+
+    // Compute next order_index.
+    const { data: lastClip } = await supabase
+      .from("clips")
+      .select("order_index")
+      .eq("project_id", project.id)
+      .order("order_index", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const orderIndex = (lastClip?.order_index ?? -1) + 1;
+
+    imagePrompt =
+      body.image_prompt ??
+      shot.image_prompt ??
+      shot.prompt; // fall back to the video prompt if the model skipped the image prompt
+    aspectRatio = body.aspect_ratio ?? "9:16";
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("clips")
+      .insert({
+        project_id: project.id,
+        order_index: orderIndex,
+        prompt: shot.prompt,
+        still_prompt: shot.image_prompt || null,
+        narration: shot.narration || null,
+        shot_metadata: {
+          shot_type: shot.shot_type,
+          shot_number: shot.shot_number,
+          duration: shot.duration,
+          continuity_notes: shot.continuity_notes,
+          voice_direction: shot.voice_direction,
+          suggested_seed_behavior: shot.suggested_seed_behavior,
+          image_prompt: shot.image_prompt,
+          narration: shot.narration,
+        },
+        status: "queued",
+        still_status: "queued",
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !inserted) {
+      return NextResponse.json(
+        { error: insertErr?.message ?? "Failed to create clip" },
+        { status: 500 },
+      );
+    }
+    clipId = inserted.id;
+  }
+
+  // Mark the still as processing before the network call.
+  await admin
+    .from("clips")
+    .update({ still_status: "processing", still_prompt: imagePrompt })
+    .eq("id", clipId);
+
+  // Kick off Flux. No webhook — we poll the prediction inline.
+  try {
+    const inputValidated = fluxInputSchema.parse({
+      prompt: imagePrompt,
+      aspect_ratio: aspectRatio,
+    });
+
+    const prediction = await createPrediction({
+      model: FLUX_MODEL,
+      input: inputValidated,
+    });
+
+    await admin
+      .from("clips")
+      .update({ still_replicate_prediction_id: prediction.id })
+      .eq("id", clipId);
+
+    // Poll until Flux finishes. Usually 5-10 seconds for Flux 1.1 Pro.
+    const deadline = Date.now() + 45_000; // give up after 45s
+    let final = prediction;
+    while (
+      (final.status === "starting" || final.status === "processing") &&
+      Date.now() < deadline
+    ) {
+      await new Promise((r) => setTimeout(r, 1500));
+      final = await getPrediction(prediction.id);
+    }
+
+    if (final.status !== "succeeded") {
+      const errMsg =
+        final.error ?? `Still generation ${final.status}`;
+      await admin
+        .from("clips")
+        .update({
+          still_status: "failed",
+          error_message: String(errMsg),
+        })
+        .eq("id", clipId);
+      return NextResponse.json({ error: String(errMsg) }, { status: 502 });
+    }
+
+    const output = final.output;
+    const outputUrl =
+      typeof output === "string"
+        ? output
+        : Array.isArray(output) && typeof output[0] === "string"
+        ? (output[0] as string)
+        : null;
+
+    if (!outputUrl) {
+      await admin
+        .from("clips")
+        .update({
+          still_status: "failed",
+          error_message: "Flux returned no image URL",
+        })
+        .eq("id", clipId);
+      return NextResponse.json(
+        { error: "No image returned." },
+        { status: 502 },
+      );
+    }
+
+    // Mirror into our own Storage — Replicate's CDN signed URLs expire
+    // within ~1h and we'll use this image as the Seedance seed later.
+    const { blob, contentType } = await fetchReplicateOutputAsBlob(outputUrl);
+    const ext = contentType.includes("jpeg") ? "jpg" : "png";
+    const storagePath = `${project.id}/stills/${clipId}/image.${ext}`;
+
+    const { error: uploadErr } = await admin.storage
+      .from("clips")
+      .upload(storagePath, blob, {
+        contentType,
+        upsert: true,
+      });
+    if (uploadErr) {
+      await admin
+        .from("clips")
+        .update({
+          still_status: "failed",
+          error_message: `Upload failed: ${uploadErr.message}`,
+        })
+        .eq("id", clipId);
+      return NextResponse.json({ error: uploadErr.message }, { status: 500 });
+    }
+
+    const { data: signed } = await admin.storage
+      .from("clips")
+      .createSignedUrl(storagePath, 60 * 60 * 6);
+
+    const finalUrl = signed?.signedUrl ?? null;
+
+    await admin
+      .from("clips")
+      .update({
+        still_status: "complete",
+        still_image_url: finalUrl,
+        // Also seed the downstream video pipeline with this image path.
+        seed_image_url: finalUrl,
+        seed_source: "auto",
+        error_message: null,
+      })
+      .eq("id", clipId);
+
+    // Record usage.
+    void recordUsage({
+      admin,
+      userId: user.id,
+      projectId: project.id,
+      provider: "replicate",
+      action: "generate",
+      metadata: {
+        clip_id: clipId,
+        prediction_id: prediction.id,
+        model: FLUX_MODEL,
+        kind: "still",
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      clip_id: clipId,
+      still_image_url: finalUrl,
+      prediction_id: prediction.id,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await admin
+      .from("clips")
+      .update({ still_status: "failed", error_message: msg })
+      .eq("id", clipId);
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
+}
+
+// So the TS compiler sees we didn't orphan the env import.
+void env;

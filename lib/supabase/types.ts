@@ -12,6 +12,7 @@
 import type { ShotPromptMetadata } from "@/lib/shot-prompt";
 
 export type ClipStatus = "queued" | "processing" | "complete" | "failed";
+export type StillStatus = "none" | "queued" | "processing" | "complete" | "failed";
 export type SeedSource = "auto" | "manual_frame" | "upload" | "none";
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -97,6 +98,12 @@ type ClipsTable = {
     status: ClipStatus;
     replicate_prediction_id: string | null;
     error_message: string | null;
+    // Stills pipeline (added 0003_stills.sql)
+    still_image_url: string | null;
+    still_prompt: string | null;
+    still_status: StillStatus;
+    still_replicate_prediction_id: string | null;
+    narration: string | null;
     created_at: string;
   };
   Insert: {
@@ -113,6 +120,11 @@ type ClipsTable = {
     status?: ClipStatus;
     replicate_prediction_id?: string | null;
     error_message?: string | null;
+    still_image_url?: string | null;
+    still_prompt?: string | null;
+    still_status?: StillStatus;
+    still_replicate_prediction_id?: string | null;
+    narration?: string | null;
     created_at?: string;
   };
   Update: {
@@ -129,6 +141,11 @@ type ClipsTable = {
     status?: ClipStatus;
     replicate_prediction_id?: string | null;
     error_message?: string | null;
+    still_image_url?: string | null;
+    still_prompt?: string | null;
+    still_status?: StillStatus;
+    still_replicate_prediction_id?: string | null;
+    narration?: string | null;
     created_at?: string;
   };
   Relationships: [

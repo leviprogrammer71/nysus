@@ -88,6 +88,8 @@ export async function POST(request: NextRequest) {
         continuity_notes: body.shot.continuity_notes,
         voice_direction: body.shot.voice_direction,
         suggested_seed_behavior: body.shot.suggested_seed_behavior,
+        image_prompt: body.shot.image_prompt,
+        narration: body.shot.narration,
       },
       seed_image_url: body.seed_image_url ?? null,
       seed_source: body.seed_source,

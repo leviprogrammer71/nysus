@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { shotPromptSchema, type ShotPrompt } from "@/lib/shot-prompt";
 import { ShotCard } from "./shot-card";
 import { ToolEventCard } from "./tool-event-card";
+import { Logomark } from "@/app/components/logomark";
 
 export type ChatMessage = {
   id: string;
@@ -94,10 +95,17 @@ export function MessageBubble({
   const segments = splitAssistantContent(message.content);
 
   return (
-    <div className="flex">
+    <div className="flex gap-3">
+      <div className="shrink-0 mt-0.5">
+        {/* Dio "reflects" — animated logomark avatar on every turn. */}
+        <Logomark
+          size={28}
+          animated={message.streaming}
+        />
+      </div>
       <div className="max-w-[92%] flex-1">
         <div className="flex items-center gap-2 mb-1 font-hand text-sepia-deep text-base">
-          <span>the director</span>
+          <span>Dio</span>
           {message.streaming ? (
             <span
               className="inline-block w-1.5 h-3.5 bg-ink align-middle animate-pulse"

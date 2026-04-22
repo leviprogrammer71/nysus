@@ -6,6 +6,7 @@ import { ChatPanel } from "./chat/chat-panel";
 import type { ChatMessage } from "./chat/message";
 import { Timeline } from "./timeline/timeline";
 import { ClipDetailSheet } from "./timeline/clip-detail-sheet";
+import { StillsPanel } from "./timeline/stills-panel";
 import type { TimelineClip } from "./timeline/types";
 import type { ShotPrompt } from "@/lib/shot-prompt";
 
@@ -84,6 +85,8 @@ export function Workspace({
           continuity_notes: shot.continuity_notes,
           voice_direction: shot.voice_direction,
           suggested_seed_behavior: shot.suggested_seed_behavior,
+          image_prompt: shot.image_prompt,
+          narration: shot.narration,
         },
         seed_image_url: seedUrl,
         seed_source: seedSource,
@@ -93,6 +96,11 @@ export function Workspace({
         status: "queued",
         replicate_prediction_id: null,
         error_message: null,
+        still_image_url: null,
+        still_prompt: shot.image_prompt || null,
+        still_status: "none",
+        still_replicate_prediction_id: null,
+        narration: shot.narration || null,
         created_at: new Date().toISOString(),
       };
       upsertClip(optimistic);
@@ -214,9 +222,11 @@ export function Workspace({
 
       <div className="rule-ink mt-6 mb-6" />
 
+      <StillsPanel clips={clips} onOpen={setOpenClipId} />
+
       <section id="timeline" className="mb-6 scroll-mt-20">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-hand text-lg text-sepia-deep">timeline</h2>
+          <h2 className="font-hand text-lg text-sepia-deep">videos</h2>
           <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50">
             {clips.length} {clips.length === 1 ? "clip" : "clips"}
           </span>
