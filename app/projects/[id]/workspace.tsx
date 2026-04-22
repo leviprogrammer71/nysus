@@ -214,7 +214,7 @@ export function Workspace({
 
       <div className="rule-ink mt-6 mb-6" />
 
-      <section className="mb-6">
+      <section id="timeline" className="mb-6 scroll-mt-20">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-hand text-lg text-sepia-deep">timeline</h2>
           <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50">
@@ -224,7 +224,7 @@ export function Workspace({
         <Timeline clips={clips} onOpen={setOpenClipId} />
       </section>
 
-      <section className="mb-8">
+      <section id="chat" className="mb-8 scroll-mt-20">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-hand text-lg text-sepia-deep">chat</h2>
           <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50">

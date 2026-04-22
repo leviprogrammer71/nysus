@@ -26,7 +26,7 @@ export default function SetupPage() {
   return (
     <main className="min-h-screen flex flex-col px-6 py-10 max-w-2xl mx-auto w-full">
       <header className="flex flex-col items-center gap-3 text-center mb-10">
-        <Logomark size={80} priority className="animate-paper-breath" />
+        <Logomark size={80} priority animated />
         <h1 className="font-display text-4xl tracking-[0.2em] text-ink">
           NYSUS
         </h1>

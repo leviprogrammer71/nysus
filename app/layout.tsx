@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter, Caveat, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { InstallPrompt } from "./install-prompt";
+import { BottomNav } from "./components/bottom-nav";
+import { MoreMenu } from "./components/more-menu";
 
 // Director's Desk typography stack — see PROGRESS.md § Design System
 const display = Cormorant_Garamond({
@@ -91,7 +93,16 @@ export default function RootLayout({
       className={`${display.variable} ${body.variable} ${hand.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-paper text-ink font-body">
-        {children}
+        {/*
+          md:pb-0 because the BottomNav is mobile-only. On small
+          screens we reserve the full bar height plus safe-area so
+          fixed content doesn't slide under the nav.
+        */}
+        <div className="flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+          {children}
+        </div>
+        <BottomNav />
+        <MoreMenu />
         <InstallPrompt />
       </body>
     </html>

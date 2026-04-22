@@ -5,27 +5,28 @@ import Image from "next/image";
  * ivy vines and film strips wrapping around it. Hand-drawn pen sketch
  * in navy ink on cream paper.
  *
- * Source: /public/illustrations/logo-mark.png (1254×1254 raster). Used
- * in the PWA icons, login / home / setup headers, splash screen, and
- * OG image.
- *
- * Props:
- *   size   — pixel diameter (default 48)
- *   ring   — wrap in a thin ink circle, matching the old "N" mark feel
- *   priority — hint Next to eager-load (login / splash uses this)
+ * Static variant uses the raster PNG. Animated variant plays a muted
+ * looping MP4 on top of the same poster frame so the first paint is
+ * the static logo — no white flash when the browser is slow to
+ * decode the video.
  */
 export function Logomark({
   size = 48,
   ring = false,
   priority = false,
+  animated = false,
   className,
 }: {
   size?: number;
   ring?: boolean;
   priority?: boolean;
+  /** Play welcome-loop.mp4 behind the logo. Silent, looping. */
+  animated?: boolean;
   className?: string;
 }) {
-  const img = (
+  const content = animated ? (
+    <AnimatedLogo size={size} priority={priority} />
+  ) : (
     <Image
       src="/illustrations/logo-mark.png"
       alt="Nysus logomark"
@@ -33,12 +34,11 @@ export function Logomark({
       height={size}
       priority={priority}
       className={`block ${className ?? ""}`.trim()}
-      // Raster source; let Next handle responsive srcset.
       sizes={`${size}px`}
     />
   );
 
-  if (!ring) return img;
+  if (!ring) return content;
 
   return (
     <span
@@ -46,7 +46,54 @@ export function Logomark({
       className="inline-flex items-center justify-center rounded-full border border-ink/60 overflow-hidden"
       style={{ width: size, height: size }}
     >
-      {img}
+      {content}
+    </span>
+  );
+}
+
+/**
+ * Muted auto-looping video with a PNG poster that shows first-paint
+ * so it reads as "still logo that decided to move" rather than "video
+ * thumbnail."
+ *
+ * `playsInline` is critical on iOS — without it Safari takes the video
+ * fullscreen on autoplay.
+ */
+function AnimatedLogo({
+  size,
+  priority,
+}: {
+  size: number;
+  priority: boolean;
+}) {
+  return (
+    <span
+      className="relative block overflow-hidden"
+      style={{ width: size, height: size }}
+      aria-label="Nysus logomark"
+    >
+      {/* Preload the poster as an image so the first paint is the
+          sketch even while the browser negotiates the video. */}
+      <Image
+        src="/illustrations/logo-mark.png"
+        alt=""
+        width={size}
+        height={size}
+        priority={priority}
+        className="absolute inset-0 block"
+        sizes={`${size}px`}
+      />
+      <video
+        src="/video/welcome-loop.mp4"
+        poster="/illustrations/logo-mark.png"
+        muted
+        autoPlay
+        loop
+        playsInline
+        preload="metadata"
+        className="relative block w-full h-full object-cover"
+        aria-hidden
+      />
     </span>
   );
 }

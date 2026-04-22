@@ -1,5 +1,6 @@
 import { LoginForm } from "./login-form";
 import { Logomark } from "@/app/components/logomark";
+import { WelcomeSplash } from "./welcome-splash";
 
 export const metadata = {
   title: "Sign in · Nysus",
@@ -8,9 +9,10 @@ export const metadata = {
 export default function LoginPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+      <WelcomeSplash />
       <div className="w-full max-w-md flex flex-col items-center gap-8">
         <header className="flex flex-col items-center gap-3 text-center">
-          <Logomark size={96} priority className="animate-paper-breath" />
+          <Logomark size={96} priority animated />
           <h1 className="font-display text-4xl tracking-[0.2em] text-ink">
             NYSUS
           </h1>

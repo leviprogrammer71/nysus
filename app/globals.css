@@ -38,6 +38,14 @@ html,
 body {
   background: var(--color-paper);
   color: var(--color-ink);
+  /*
+    Lock horizontal page overflow — only specific intentional
+    regions (e.g. the clip timeline) scroll sideways, in their
+    own container. Prevents accidental body jank on mobile when
+    a slightly-wider-than-viewport element sneaks in.
+  */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 body {
