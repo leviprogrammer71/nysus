@@ -74,15 +74,15 @@ export default async function DashboardPage() {
       <AppTopbar email={user?.email ?? null} />
 
       {/* Workspace header */}
-      <section className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <section className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="font-body text-[11px] uppercase tracking-[0.25em] text-ink-soft/60">
+          <p className="font-body text-[11px] uppercase tracking-[0.28em] text-ink-soft/70">
             Workspace
           </p>
-          <h1 className="mt-1 font-display text-3xl text-ink sm:text-4xl">
+          <h1 className="mt-2 font-display text-3xl text-ink sm:text-4xl tracking-tight">
             Your productions
           </h1>
-          <p className="mt-1 font-body text-sm text-ink-soft/75">
+          <p className="mt-2 font-body text-sm text-ink-soft/80 leading-relaxed">
             {hasProjects
               ? `${totalProjects} ${
                   totalProjects === 1 ? "project" : "projects"
@@ -91,16 +91,10 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href="/gallery"
-            className="inline-flex h-10 items-center rounded-full border border-ink/25 bg-paper px-4 font-body text-xs uppercase tracking-widest text-ink hover:bg-paper-deep"
-          >
+          <Link href="/gallery" className="btn-secondary">
             Browse gallery
           </Link>
-          <Link
-            href="/projects/new"
-            className="inline-flex h-10 items-center rounded-full bg-ink px-4 font-body text-xs uppercase tracking-widest text-paper hover:bg-ink-soft"
-          >
+          <Link href="/projects/new" className="btn-primary">
             + New project
           </Link>
         </div>
@@ -187,11 +181,11 @@ export default async function DashboardPage() {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex items-baseline justify-between rounded-lg border border-ink/10 bg-paper-deep px-3 py-3">
-      <span className="font-display text-2xl leading-none text-ink">
+    <div className="surface-card animate-lift flex items-baseline justify-between rounded-xl px-4 py-3.5">
+      <span className="font-display text-2xl leading-none text-ink tabular-nums tracking-tight">
         {value}
       </span>
-      <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/70">
+      <span className="font-body text-[10px] uppercase tracking-[0.18em] text-ink-soft/70">
         {label}
       </span>
     </div>

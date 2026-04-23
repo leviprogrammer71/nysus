@@ -3,14 +3,7 @@ import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated } from "@/lib/auth";
 import {
-  createPrediction,
-  fetchReplicateOutputAsBlob,
-  getPrediction,
-} from "@/lib/replicate";
-import { fluxInputSchema, FLUX_MODEL, FLUX_DRAFT_MODEL } from "@/lib/flux";
-import {
   generateOpenAIImage,
-  hasOpenAIImageKey,
   OPENAI_IMAGE_MODEL,
 } from "@/lib/openai-images";
 import { shotPromptSchema } from "@/lib/shot-prompt";
@@ -23,7 +16,7 @@ import { awardEvent } from "@/lib/progress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 const bodySchema = z.object({
   project_id: z.string().uuid(),
@@ -38,13 +31,10 @@ const bodySchema = z.object({
 /**
  * POST /api/stills/generate
  *
- * Provider routing:
- *   OPENAI_API_KEY set → OpenAI gpt-image-1 (DALL-E lineage) — preferred.
- *   Otherwise → Replicate Flux fallback.
- *
- * Either way the output is uploaded to Storage at
- * {project}/stills/{clip}/image.png and the clip row is updated with
- * still_image_url + seed_image_url so animate can pick it up.
+ * Single provider: Replicate's openai/gpt-image-2. The image is
+ * uploaded to Storage at {project}/stills/{clip}/image.png and the
+ * clip row is updated with still_image_url + seed_image_url so
+ * animate can pick it up.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -95,7 +85,7 @@ export async function POST(request: NextRequest) {
   // --- Resolve clip row (create if needed) ----------------------------
   let clipId: string;
   let imagePrompt: string;
-  let aspectRatio: z.infer<typeof fluxInputSchema>["aspect_ratio"];
+  let aspectRatio: "9:16" | "16:9" | "1:1" | "4:3" | "3:4" | "21:9";
 
   if (body.clip_id) {
     const { data: existing, error: readErr } = await supabase
@@ -172,111 +162,21 @@ export async function POST(request: NextRequest) {
     .update({ still_status: "processing", still_prompt: imagePrompt })
     .eq("id", clipId);
 
-  // --- Generate via OpenAI (with Flux fallback) -----------------------
-  // Strategy:
-  //   1. If OPENAI_API_KEY present, try gpt-image-2 → gpt-image-1 chain.
-  //   2. If that chain fails for any reason (network, gated model,
-  //      content policy) AND REPLICATE_API_TOKEN is also set, fall
-  //      through to Flux so the user isn't stuck.
-  //   3. If OPENAI_API_KEY isn't present at all, go straight to Flux.
-  const hasOpenAI = hasOpenAIImageKey();
-  const hasReplicate = Boolean(
-    (process.env.REPLICATE_API_TOKEN ?? "").trim(),
-  );
-
-  let provider: "openai" | "flux" = hasOpenAI ? "openai" : "flux";
-  let modelSlug = hasOpenAI
-    ? OPENAI_IMAGE_MODEL
-    : draft
-    ? FLUX_DRAFT_MODEL
-    : FLUX_MODEL;
-  let openaiError: string | null = null;
-
   try {
-    let imageBlob: Blob | null = null;
-    let imageContentType: string | null = null;
-    let predictionId: string | null = null;
-
-    if (hasOpenAI) {
-      try {
-        const img = await generateOpenAIImage({
-          prompt: imagePrompt,
-          aspect_ratio: aspectRatio,
-          draft,
-        });
-        imageBlob = img.blob;
-        imageContentType = img.contentType;
-        // Record the model that ACTUALLY produced the image — may be
-        // the fallback one.
-        modelSlug = img.model;
-        provider = "openai";
-      } catch (err) {
-        openaiError = err instanceof Error ? err.message : String(err);
-        if (!hasReplicate) throw err;
-        console.warn(
-          "OpenAI image generation failed, falling back to Flux:",
-          openaiError,
-        );
-        provider = "flux";
-        modelSlug = draft ? FLUX_DRAFT_MODEL : FLUX_MODEL;
-      }
-    }
-
-    // Flux path runs when we started there (no OpenAI) OR we fell back
-    // from an OpenAI failure above.
-    if (!imageBlob) {
-      const inputValidated = fluxInputSchema.parse({
-        prompt: imagePrompt,
-        aspect_ratio: aspectRatio,
-        ...(draft ? { output_quality: 80 } : {}),
-      });
-      const prediction = await createPrediction({
-        model: modelSlug,
-        input: inputValidated,
-      });
-      predictionId = prediction.id;
-      await admin
-        .from("clips")
-        .update({ still_replicate_prediction_id: prediction.id })
-        .eq("id", clipId);
-
-      const deadline = Date.now() + 45_000;
-      let final = prediction;
-      while (
-        (final.status === "starting" || final.status === "processing") &&
-        Date.now() < deadline
-      ) {
-        await new Promise((r) => setTimeout(r, 1500));
-        final = await getPrediction(prediction.id);
-      }
-      if (final.status !== "succeeded") {
-        throw new Error(String(final.error ?? `Flux ${final.status}`));
-      }
-      const output = final.output;
-      const outputUrl =
-        typeof output === "string"
-          ? output
-          : Array.isArray(output) && typeof output[0] === "string"
-          ? (output[0] as string)
-          : null;
-      if (!outputUrl) throw new Error("Flux returned no image URL");
-      const fetched = await fetchReplicateOutputAsBlob(outputUrl);
-      imageBlob = fetched.blob;
-      imageContentType = fetched.contentType;
-    }
-
-    if (!imageBlob || !imageContentType) {
-      throw new Error("Still generation produced no output.");
-    }
+    const img = await generateOpenAIImage({
+      prompt: imagePrompt,
+      aspect_ratio: aspectRatio,
+      draft,
+    });
 
     // --- Mirror to Storage ----------------------------------------------
-    const ext = imageContentType.includes("jpeg") ? "jpg" : "png";
+    const ext = img.contentType.includes("jpeg") ? "jpg" : "png";
     const storagePath = `${project.id}/stills/${clipId}/image.${ext}`;
 
     const { error: uploadErr } = await admin.storage
       .from("clips")
-      .upload(storagePath, imageBlob, {
-        contentType: imageContentType,
+      .upload(storagePath, img.blob, {
+        contentType: img.contentType,
         upsert: true,
       });
     if (uploadErr) {
@@ -310,22 +210,18 @@ export async function POST(request: NextRequest) {
       admin,
       userId: user.id,
       projectId: project.id,
-      provider: provider === "openai" ? "openai" : "replicate",
+      // gpt-image-2 is hosted on Replicate, not OpenAI directly.
+      provider: "replicate",
       action: "generate",
       metadata: {
         clip_id: clipId,
-        prediction_id: predictionId,
-        model: modelSlug,
+        model: img.model,
         kind: "still",
-        image_provider: provider,
+        image_provider: "replicate_openai_gpt_image_2",
         draft,
-        // Surface the original OpenAI failure when we fell back so
-        // usage logs explain why Flux was charged instead.
-        ...(openaiError ? { fallback_from: openaiError } : {}),
       },
     });
 
-    // XP + achievement hook — best-effort.
     void awardEvent({
       admin,
       userId: user.id,
@@ -337,17 +233,13 @@ export async function POST(request: NextRequest) {
       ok: true,
       clip_id: clipId,
       still_image_url: finalUrl,
-      prediction_id: predictionId,
-      provider,
-      model: modelSlug,
-      ...(openaiError ? { fell_back_from: openaiError } : {}),
+      model: img.model,
     });
   } catch (err) {
     const rawMsg = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error
       ? ((err as { cause?: unknown }).cause as Error | undefined)
       : undefined;
-    // Unwrap undici "fetch failed" wrappers so the actual cause surfaces.
     const causeMsg = cause
       ? `${(cause as { code?: string }).code ?? ""} ${cause.message ?? ""}`.trim()
       : "";
@@ -361,6 +253,9 @@ export async function POST(request: NextRequest) {
       .from("clips")
       .update({ still_status: "failed", error_message: msg })
       .eq("id", clipId);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json(
+      { error: msg, model: OPENAI_IMAGE_MODEL },
+      { status: 502 },
+    );
   }
 }

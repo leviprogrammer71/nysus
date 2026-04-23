@@ -48,7 +48,7 @@ export function ProjectCard({
   }, [thumbUrl]);
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-ink/10 bg-paper-deep animate-lift hover:border-ink/30">
+    <div className="group relative overflow-hidden rounded-xl border border-ink/10 bg-paper-deep shadow-[0_1px_2px_rgba(27,42,58,0.04)] animate-lift hover:border-ink/30">
       <Link href={`/projects/${id}`} className="block">
         <div className="relative aspect-[4/3] w-full bg-paper-deep">
           {imgUrl ? (

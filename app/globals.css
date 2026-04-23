@@ -9,16 +9,19 @@
 */
 
 @theme inline {
-  /* Palette */
+  /* Palette — refined with a subtle warm undertone throughout. */
   --color-paper:        #F5EFE0;  /* warm cream, main bg */
   --color-paper-deep:   #EBE3D1;  /* cards, bottom sheets */
+  --color-paper-soft:   #F0E8D5;  /* subtle mid-layer between paper + paper-deep */
   --color-ink:          #1B2A3A;  /* navy-black, primary text + illustrations */
   --color-ink-soft:     #2C3E50;  /* secondary text */
+  --color-ink-faint:    #4A5A6C;  /* disabled / tertiary */
   --color-sepia:        #B8956A;  /* accents, scribbles */
   --color-highlight:    #E8D27A;  /* yellow highlighter */
   --color-sepia-deep:   #8B6F47;  /* hover / pressed */
   --color-wine-dark:    #5B1A2B;  /* Dionysian brand accent — sparingly */
   --color-red-grease:   #A0392C;  /* red pencil — errors + critique only */
+  --color-green-seal:   #4A6B4A;  /* success state (rare) */
 
   /* Semantic aliases */
   --color-background:   var(--color-paper);
@@ -32,6 +35,14 @@
 
   /* Motion — cubic-bezier(.4, 0, .2, 1), no springy bounces */
   --ease-paper: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-refined: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Shadow language — ink-tinted, layered for depth.
+     Keep them soft; the paper aesthetic dies if shadows look synthetic. */
+  --shadow-sm: 0 1px 2px rgba(27, 42, 58, 0.04), 0 0 0 1px rgba(27, 42, 58, 0.03);
+  --shadow-md: 0 4px 10px rgba(27, 42, 58, 0.05), 0 1px 3px rgba(27, 42, 58, 0.04);
+  --shadow-lg: 0 12px 28px rgba(27, 42, 58, 0.08), 0 4px 10px rgba(27, 42, 58, 0.04);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(27, 42, 58, 0.06);
 }
 
 html,
@@ -50,11 +61,37 @@ body {
 
 body {
   font-family: var(--font-body);
-  /* Subtle paper-grain tint: very soft radial so the cream isn't flat */
+  /* Subtle paper-grain tint: soft radials + a third highlight for depth */
   background-image:
-    radial-gradient(at 20% 10%, rgba(184, 149, 106, 0.06) 0px, transparent 40%),
-    radial-gradient(at 80% 90%, rgba(27, 42, 58, 0.04) 0px, transparent 50%);
+    radial-gradient(at 20% 10%, rgba(184, 149, 106, 0.07) 0px, transparent 40%),
+    radial-gradient(at 80% 90%, rgba(27, 42, 58, 0.05) 0px, transparent 50%),
+    radial-gradient(at 50% 0%, rgba(255, 255, 255, 0.4) 0px, transparent 35%);
   background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "ss02", "cv11";
+}
+
+/* Refined focus ring — inherits ink color, always visible to keyboard
+   users, invisible on mouse taps. Keeps the paper palette elegant
+   instead of browser-default blue halos. */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+  transition: outline-offset 120ms var(--ease-out-refined);
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Selection — warm, subtle, paper-consistent. */
+::selection {
+  background: rgba(232, 210, 122, 0.55);
+  color: var(--color-ink);
 }
 
 /* Reserved for margin notes, shot numbers, voice transcripts in-flight */
@@ -62,16 +99,119 @@ body {
   font-family: var(--font-hand);
 }
 
-/* One highlighted keyword per screen title — hand-drawn yellow streak */
+/* One highlighted keyword per screen title — hand-drawn yellow streak.
+   Layered so it reads as a pencil mark, not a flat rectangle. */
 .highlight {
-  background: linear-gradient(
-    180deg,
-    transparent 55%,
-    var(--color-highlight) 55%,
-    var(--color-highlight) 92%,
-    transparent 92%
-  );
-  padding: 0 0.1em;
+  background-image:
+    linear-gradient(
+      180deg,
+      transparent 55%,
+      var(--color-highlight) 55%,
+      rgba(232, 210, 122, 0.92) 92%,
+      transparent 92%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(232, 210, 122, 0) 0%,
+      rgba(232, 210, 122, 0.3) 5%,
+      rgba(232, 210, 122, 0.3) 95%,
+      rgba(232, 210, 122, 0) 100%
+    );
+  padding: 0 0.18em;
+  margin: 0 -0.08em;
+}
+
+/* Display type refinement — heavier optical kerning + tight tracking. */
+.font-display {
+  letter-spacing: -0.015em;
+  font-feature-settings: "lnum", "ss01";
+}
+h1.font-display, h2.font-display, h3.font-display {
+  letter-spacing: -0.02em;
+}
+
+/* Elevated surface — use on hero cards / modal sheets where a subtle
+   lift reads as "important". Paper texture + refined shadow. */
+.surface-elevated {
+  background: var(--color-paper);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(27, 42, 58, 0.08);
+}
+.surface-card {
+  background: var(--color-paper-deep);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(27, 42, 58, 0.08);
+}
+.surface-card-soft {
+  background: var(--color-paper-soft);
+  border: 1px solid rgba(27, 42, 58, 0.06);
+}
+
+/* Primary button — refined ink pill with subtle highlight top edge. */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  height: 2.75rem;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    transform 120ms var(--ease-out-refined),
+    box-shadow 180ms var(--ease-out-refined),
+    background-color 180ms var(--ease-out-refined);
+}
+.btn-primary:hover {
+  background: var(--color-ink-soft);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Secondary button — paper with refined border. */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  height: 2.75rem;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  border: 1px solid rgba(27, 42, 58, 0.2);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 120ms var(--ease-out-refined),
+    background-color 180ms var(--ease-out-refined),
+    border-color 180ms var(--ease-out-refined);
+}
+.btn-secondary:hover {
+  background: var(--color-paper-deep);
+  border-color: rgba(27, 42, 58, 0.35);
+}
+.btn-secondary:active {
+  transform: scale(0.98);
 }
 
 /* Thin navy horizontal rule between sections */
@@ -228,14 +368,14 @@ body {
 /* Cards + tiles that should subtly lift on hover. */
 .animate-lift {
   transition:
-    transform 200ms var(--ease-paper),
-    box-shadow 200ms var(--ease-paper),
-    border-color 200ms var(--ease-paper);
+    transform 240ms var(--ease-out-refined),
+    box-shadow 240ms var(--ease-out-refined),
+    border-color 240ms var(--ease-out-refined);
 }
 @media (hover: hover) {
   .animate-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(27, 42, 58, 0.08);
+    box-shadow: var(--shadow-lg);
   }
 }
 

@@ -3,14 +3,7 @@ import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated, normalizeEmail } from "@/lib/auth";
 import {
-  createPrediction,
-  fetchReplicateOutputAsBlob,
-  getPrediction,
-} from "@/lib/replicate";
-import { fluxInputSchema, FLUX_MODEL } from "@/lib/flux";
-import {
   generateOpenAIImage,
-  hasOpenAIImageKey,
   OPENAI_IMAGE_MODEL,
 } from "@/lib/openai-images";
 import {
@@ -121,100 +114,18 @@ export async function POST(request: NextRequest) {
     );
 
   // --- Generate ------------------------------------------------------
-  const useOpenAI = hasOpenAIImageKey();
-  const provider: "openai" | "flux" = useOpenAI ? "openai" : "flux";
-  const modelSlug = useOpenAI ? OPENAI_IMAGE_MODEL : FLUX_MODEL;
-
+  // Single provider: Replicate's openai/gpt-image-2. No Flux fallback.
   let imageBlob: Blob;
   let imageContentType: string;
-  let predictionId: string | null = null;
-
-  const hasReplicate = Boolean(
-    (process.env.REPLICATE_API_TOKEN ?? "").trim(),
-  );
-  let openaiError: string | null = null;
-  let effectiveProvider = provider;
-
+  let modelSlug = OPENAI_IMAGE_MODEL;
   try {
-    if (useOpenAI) {
-      try {
-        const img = await generateOpenAIImage({
-          prompt,
-          aspect_ratio: "3:4", // taller portrait framing
-        });
-        imageBlob = img.blob;
-        imageContentType = img.contentType;
-      } catch (err) {
-        openaiError = err instanceof Error ? err.message : String(err);
-        if (!hasReplicate) throw err;
-        console.warn(
-          "OpenAI portrait failed, falling back to Flux:",
-          openaiError,
-        );
-        effectiveProvider = "flux";
-        const prediction = await createPrediction({
-          model: FLUX_MODEL,
-          input: fluxInputSchema.parse({ prompt, aspect_ratio: "3:4" }),
-        });
-        predictionId = prediction.id;
-        const deadline = Date.now() + 45_000;
-        let final = prediction;
-        while (
-          (final.status === "starting" || final.status === "processing") &&
-          Date.now() < deadline
-        ) {
-          await new Promise((r) => setTimeout(r, 1500));
-          final = await getPrediction(prediction.id);
-        }
-        if (final.status !== "succeeded") {
-          throw new Error(String(final.error ?? `Flux ${final.status}`));
-        }
-        const output = final.output;
-        const outputUrl =
-          typeof output === "string"
-            ? output
-            : Array.isArray(output) && typeof output[0] === "string"
-            ? (output[0] as string)
-            : null;
-        if (!outputUrl) throw new Error("Flux returned no image URL");
-        const fetched = await fetchReplicateOutputAsBlob(outputUrl);
-        imageBlob = fetched.blob;
-        imageContentType = fetched.contentType;
-      }
-    } else {
-      const prediction = await createPrediction({
-        model: FLUX_MODEL,
-        input: fluxInputSchema.parse({
-          prompt,
-          aspect_ratio: "3:4",
-        }),
-      });
-      predictionId = prediction.id;
-
-      const deadline = Date.now() + 45_000;
-      let final = prediction;
-      while (
-        (final.status === "starting" || final.status === "processing") &&
-        Date.now() < deadline
-      ) {
-        await new Promise((r) => setTimeout(r, 1500));
-        final = await getPrediction(prediction.id);
-      }
-      if (final.status !== "succeeded") {
-        throw new Error(String(final.error ?? `Flux ${final.status}`));
-      }
-      const output = final.output;
-      const outputUrl =
-        typeof output === "string"
-          ? output
-          : Array.isArray(output) && typeof output[0] === "string"
-          ? (output[0] as string)
-          : null;
-      if (!outputUrl) throw new Error("Flux returned no image URL");
-      const fetched = await fetchReplicateOutputAsBlob(outputUrl);
-      imageBlob = fetched.blob;
-      imageContentType = fetched.contentType;
-    }
+    const img = await generateOpenAIImage({
+      prompt,
+      aspect_ratio: "3:4", // taller portrait framing
+    });
+    imageBlob = img.blob;
+    imageContentType = img.contentType;
+    modelSlug = img.model;
   } catch (err) {
     const rawMsg = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error
@@ -276,14 +187,13 @@ export async function POST(request: NextRequest) {
     admin,
     userId: user.id,
     projectId: project.id,
-    provider: effectiveProvider === "openai" ? "openai" : "replicate",
+    provider: "replicate",
     action: "generate",
     metadata: {
       kind: "character_portrait",
       character: character.name ?? body.character_name,
-      model: effectiveProvider === "openai" ? modelSlug : FLUX_MODEL,
-      prediction_id: predictionId,
-      ...(openaiError ? { fallback_from: openaiError } : {}),
+      model: modelSlug,
+      image_provider: "replicate_openai_gpt_image_2",
     },
   });
 
@@ -299,7 +209,7 @@ export async function POST(request: NextRequest) {
     character_name: character.name ?? body.character_name,
     path: storagePath,
     preview_url: signed?.signedUrl ?? null,
-    provider,
+    provider: "replicate",
     model: modelSlug,
   });
 }

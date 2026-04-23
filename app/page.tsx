@@ -52,36 +52,40 @@ export default async function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="mb-10">
-        <p className="font-body text-[11px] uppercase tracking-[0.25em] text-ink-soft/60">
-          A studio in your pocket
-        </p>
-        <h1 className="font-display text-4xl sm:text-6xl text-ink leading-[1.05] mt-3">
-          Short films, <span className="highlight">chained</span> scene by
-          scene.
-        </h1>
-        <p className="font-body text-base sm:text-lg text-ink-soft/85 mt-4 max-w-xl leading-relaxed">
-          Nysus is a chat-driven filmmaking workspace. Talk the story through
-          with an AI director, get a storyboard, generate stills with
-          gpt-image-2, animate with Seedance 2.0 or Kling, and stitch it all
-          into an MP4 — without leaving your phone.
-        </p>
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <Link
-            href="/login"
-            className="px-5 h-11 inline-flex items-center bg-ink text-paper font-body text-sm tracking-wide hover:bg-ink-soft animate-press"
-          >
-            Start a film →
-          </Link>
-          <Link
-            href="/gallery"
-            className="px-5 h-11 inline-flex items-center bg-paper border border-ink/25 text-ink font-body text-sm tracking-wide hover:bg-paper-deep animate-press"
-          >
-            Browse the gallery
-          </Link>
-          <span className="font-body text-xs text-ink-soft/60">
-            Free to try · no credit card
-          </span>
+      <section className="relative mb-12 overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-10 right-0 h-64 w-64 rounded-full bg-highlight/20 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-0 h-48 w-48 rounded-full bg-sepia/20 blur-3xl"
+        />
+        <div className="relative">
+          <p className="font-body text-[11px] uppercase tracking-[0.28em] text-ink-soft/70">
+            A studio in your pocket
+          </p>
+          <h1 className="font-display text-[2.5rem] sm:text-6xl text-ink leading-[1.02] mt-4 tracking-tight">
+            Short films,{" "}
+            <span className="highlight">chained</span> scene by scene.
+          </h1>
+          <p className="font-body text-base sm:text-lg text-ink-soft/85 mt-5 max-w-xl leading-[1.55]">
+            A chat-driven filmmaking workspace. Talk the story through with an
+            AI director, build a storyboard, generate every frame with
+            gpt-image-2, animate with Seedance 2.0 or Kling, and stitch the
+            whole film in your browser.
+          </p>
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <Link href="/login" className="btn-primary">
+              Start a film →
+            </Link>
+            <Link href="/gallery" className="btn-secondary">
+              Browse the gallery
+            </Link>
+            <span className="font-body text-xs text-ink-soft/70">
+              Free to try · no credit card
+            </span>
+          </div>
         </div>
       </section>
 
@@ -153,14 +157,18 @@ function Beat({
   body: string;
 }) {
   return (
-    <div className="bg-paper-deep border border-ink/10 p-4 rounded-lg animate-lift">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="font-display text-sm text-sepia-deep">{step}</span>
-        <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
+    <div className="surface-card animate-lift rounded-xl p-5">
+      <div className="flex items-center gap-2">
+        <span className="font-display text-sm text-sepia-deep tabular-nums">
+          {step}
+        </span>
+        <span className="font-body text-[10px] uppercase tracking-[0.15em] text-ink-soft/70">
           {title}
         </span>
       </div>
-      <p className="font-body text-sm text-ink leading-snug">{body}</p>
+      <p className="mt-2 font-body text-sm text-ink/90 leading-relaxed">
+        {body}
+      </p>
     </div>
   );
 }
