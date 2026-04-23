@@ -245,23 +245,16 @@ export function Workspace({
         </div>
       </section>
 
-      <StillsPanel clips={clips} onOpen={setOpenClipId} />
-
-      <section id="timeline" className="mb-6 scroll-mt-20">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="font-hand text-lg text-sepia-deep">videos</h2>
-          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50">
-            {clips.length} {clips.length === 1 ? "clip" : "clips"}
-          </span>
-        </div>
-        <Timeline clips={clips} onOpen={setOpenClipId} />
-      </section>
-
+      {/* Chat comes FIRST — it's the driver for everything else. Stills,
+          timeline, and the sheets all read as derivatives of whatever
+          Dio just drafted. */}
       <section id="chat" className="mb-8 scroll-mt-20">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="font-hand text-lg text-sepia-deep">chat</h2>
-          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50">
-            the director
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-display text-base uppercase tracking-widest text-ink">
+            Chat
+          </h2>
+          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
+            Dio · the director
           </span>
         </div>
         <ChatPanel
@@ -272,11 +265,27 @@ export function Workspace({
         {genError ? (
           <p
             aria-live="polite"
-            className="mt-3 px-3 py-2 bg-paper border border-red-grease text-red-grease font-hand text-base"
+            className="mt-3 rounded border border-red-grease bg-paper px-3 py-2 font-body text-sm text-red-grease"
           >
             {genError}
           </p>
         ) : null}
+      </section>
+
+      {/* Scene outputs below the chat — the derivatives of the
+          conversation above. */}
+      <StillsPanel clips={clips} onOpen={setOpenClipId} />
+
+      <section id="timeline" className="mb-6 scroll-mt-20">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-display text-base uppercase tracking-widest text-ink">
+            Scenes
+          </h2>
+          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
+            {clips.length} {clips.length === 1 ? "clip" : "clips"}
+          </span>
+        </div>
+        <Timeline clips={clips} onOpen={setOpenClipId} />
       </section>
 
       <CharacterSheetPanel projectId={projectId} sheet={characterSheet} />

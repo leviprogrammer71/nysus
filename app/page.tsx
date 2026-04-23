@@ -69,13 +69,13 @@ export default async function LandingPage() {
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Link
             href="/login"
-            className="px-5 h-11 inline-flex items-center bg-ink text-paper font-body text-sm tracking-wide hover:bg-ink-soft transition-colors"
+            className="px-5 h-11 inline-flex items-center bg-ink text-paper font-body text-sm tracking-wide hover:bg-ink-soft animate-press"
           >
             Start a film →
           </Link>
           <Link
             href="/gallery"
-            className="px-5 h-11 inline-flex items-center bg-paper border border-ink/25 text-ink font-body text-sm tracking-wide hover:bg-paper-deep transition-colors"
+            className="px-5 h-11 inline-flex items-center bg-paper border border-ink/25 text-ink font-body text-sm tracking-wide hover:bg-paper-deep animate-press"
           >
             Browse the gallery
           </Link>
@@ -153,7 +153,7 @@ function Beat({
   body: string;
 }) {
   return (
-    <div className="bg-paper-deep border border-ink/10 p-4 rounded-lg">
+    <div className="bg-paper-deep border border-ink/10 p-4 rounded-lg animate-lift">
       <div className="flex items-center gap-2 mb-1">
         <span className="font-display text-sm text-sepia-deep">{step}</span>
         <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">

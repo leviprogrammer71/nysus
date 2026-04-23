@@ -168,7 +168,7 @@ export function StoryboardGrid({
             return (
               <li
                 key={clip.id}
-                className="group overflow-hidden rounded-lg border border-ink/15 bg-paper"
+                className="group overflow-hidden rounded-lg border border-ink/15 bg-paper animate-lift"
               >
                 <div className="relative aspect-[9/16] w-full bg-ink/5">
                   {clip.still_image_url ? (

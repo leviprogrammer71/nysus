@@ -158,6 +158,9 @@ function ShowcaseOverlay({
           autoPlay
           controls
           playsInline
+          webkit-playsinline="true"
+          muted
+          preload="metadata"
           className="absolute inset-0 w-full h-full bg-black object-contain"
         />
       </div>

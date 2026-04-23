@@ -166,7 +166,7 @@ export function BottomNav() {
               {it.href ? (
                 <Link
                   href={it.href}
-                  className={`flex flex-col items-center justify-center gap-0.5 py-2 h-14 w-full font-body text-[10px] uppercase tracking-widest transition-colors ${
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2 h-14 w-full font-body text-[10px] uppercase tracking-widest animate-press animate-icon-hover ${
                     it.active
                       ? "text-ink"
                       : "text-ink-soft/70 hover:text-ink"
@@ -202,7 +202,7 @@ function BottomNavAction({ item }: { item: NavItem }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center justify-center gap-0.5 py-2 h-14 w-full font-body text-[10px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
+      className="flex flex-col items-center justify-center gap-0.5 py-2 h-14 w-full font-body text-[10px] uppercase tracking-widest text-ink-soft/70 hover:text-ink animate-press animate-icon-hover"
     >
       <span className="h-5 flex items-center">{item.icon}</span>
       <span>{item.label}</span>

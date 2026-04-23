@@ -198,9 +198,99 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-paper-float,
   .animate-paper-breath,
-  .animate-paper-drift {
+  .animate-paper-drift,
+  .animate-lift,
+  .animate-press,
+  .animate-icon-spin,
+  .animate-icon-wiggle,
+  .animate-reveal {
     animation: none;
+    transition: none;
   }
+}
+
+/*
+  Micro-interactions. Kept restrained — the paper-desk aesthetic
+  collapses the moment motion starts feeling like a JS-app.
+*/
+
+/* Buttons + pressable surfaces. Apply on any <button> or <a>. */
+.animate-press {
+  transition:
+    transform 120ms var(--ease-paper),
+    box-shadow 120ms var(--ease-paper),
+    background-color 120ms var(--ease-paper);
+}
+.animate-press:active {
+  transform: scale(0.97);
+}
+
+/* Cards + tiles that should subtly lift on hover. */
+.animate-lift {
+  transition:
+    transform 200ms var(--ease-paper),
+    box-shadow 200ms var(--ease-paper),
+    border-color 200ms var(--ease-paper);
+}
+@media (hover: hover) {
+  .animate-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(27, 42, 58, 0.08);
+  }
+}
+
+/* Icons — add .animate-icon-hover on the parent; the <svg> child eases. */
+.animate-icon-hover svg {
+  transition: transform 180ms var(--ease-paper);
+}
+@media (hover: hover) {
+  .animate-icon-hover:hover svg {
+    transform: scale(1.08) rotate(-2deg);
+  }
+}
+
+/* Looping wiggle — use on alerting / "ready" badges. */
+@keyframes icon-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-4deg); }
+  75% { transform: rotate(4deg); }
+}
+.animate-icon-wiggle { animation: icon-wiggle 2.4s ease-in-out infinite; }
+
+/* Slow spin for loading/processing states. */
+@keyframes icon-spin {
+  to { transform: rotate(360deg); }
+}
+.animate-icon-spin { animation: icon-spin 1.6s linear infinite; }
+
+/* Scroll-reveal: set .animate-reveal, opacity 0 + y-offset, then the
+   IntersectionObserver helper (useScrollReveal) toggles .is-visible. */
+.animate-reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 380ms var(--ease-paper),
+    transform 380ms var(--ease-paper);
+}
+.animate-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Gradient shimmer for loading skeletons. */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-paper-deep) 0%,
+    rgba(255, 255, 255, 0.45) 45%,
+    var(--color-paper-deep) 90%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
 }
 
 /*

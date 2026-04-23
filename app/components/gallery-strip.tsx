@@ -48,7 +48,7 @@ export function GalleryStrip({
         {entries.map((e) => (
           <li
             key={e.id}
-            className="relative w-36 shrink-0 snap-start overflow-hidden rounded-lg border border-ink/15 bg-paper sm:w-40"
+            className="relative w-36 shrink-0 snap-start overflow-hidden rounded-lg border border-ink/15 bg-paper sm:w-40 animate-lift"
           >
             <Link href={`/share/${e.share_token}`} className="block">
               <div className="relative aspect-[9/16] w-full bg-ink/5">

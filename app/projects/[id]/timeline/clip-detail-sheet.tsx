@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { TimelineClip } from "./types";
 import { useFrameExtraction } from "./use-frame-extraction";
 import { SeedPicker } from "./seed-picker";
+import { DownloadButton } from "@/app/components/download-button";
 
 /**
  * Bottom sheet that opens when you tap a timeline clip. Video player,
@@ -175,13 +176,31 @@ export function ClipDetailSheet({
 
         <div className="px-5 py-5 space-y-5">
           {clip.status === "complete" && videoUrl ? (
-            <video
-              src={videoUrl}
-              controls
-              playsInline
-              preload="metadata"
-              className="w-full bg-black aspect-[9/16] max-h-[60vh] object-contain"
-            />
+            <div className="space-y-2">
+              <video
+                src={videoUrl}
+                controls
+                playsInline
+                webkit-playsinline="true"
+                // Muted lets iOS/mobile allow taps-to-play without a gesture.
+                muted
+                preload="metadata"
+                className="w-full bg-black aspect-[9/16] max-h-[60vh] object-contain"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <DownloadButton clipId={clip.id} kind="video" label="Save video" />
+                {clip.still_image_url ? (
+                  <DownloadButton clipId={clip.id} kind="still" label="Save still" />
+                ) : null}
+                {clip.narration_audio_url ? (
+                  <DownloadButton
+                    clipId={clip.id}
+                    kind="narration"
+                    label="Save narration"
+                  />
+                ) : null}
+              </div>
+            </div>
           ) : clip.status === "processing" || clip.status === "queued" ? (
             <div className="w-full aspect-[9/16] max-h-[60vh] bg-paper-deep flex flex-col items-center justify-center gap-4 px-6">
               {/* eslint-disable-next-line @next/next/no-img-element */}

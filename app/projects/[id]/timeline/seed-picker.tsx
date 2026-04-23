@@ -287,6 +287,8 @@ export function SeedPicker({
                       src={videoUrl}
                       controls
                       playsInline
+                      webkit-playsinline="true"
+                      muted
                       preload="metadata"
                       onTimeUpdate={handleScrubTimeUpdate}
                       onLoadedMetadata={handleLoadedMetadata}

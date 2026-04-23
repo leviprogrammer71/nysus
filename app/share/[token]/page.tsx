@@ -85,6 +85,9 @@ export default async function SharePage({ params }: PageProps) {
                   src={c.video_url}
                   controls
                   playsInline
+                  webkit-playsinline="true"
+                  muted
+                  preload="metadata"
                   className="w-full rounded border border-ink/10 bg-ink/90"
                 />
               ) : c.still_image_url ? (
