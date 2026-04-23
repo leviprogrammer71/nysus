@@ -20,69 +20,70 @@ export default async function LandingPage() {
   const entries = await loadGallery({ limit: 12 });
 
   return (
-    <main className="min-h-screen flex flex-col px-4 sm:px-6 py-6 max-w-4xl mx-auto w-full">
-      {/* Top nav */}
-      <header className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-2.5">
-          <Logomark size={32} animated />
-          <span className="font-display text-lg sm:text-xl tracking-[0.2em] text-ink">
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-5 py-5 sm:px-6 sm:py-6">
+      {/* Top nav — tight on mobile, comfortable on desktop */}
+      <header className="mb-8 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Logomark size={28} animated />
+          <span className="font-display text-[15px] sm:text-lg tracking-[0.22em] text-ink">
             NYSUS
           </span>
         </div>
-        <nav className="flex items-center gap-2 sm:gap-4">
+        <nav className="flex items-center gap-1 sm:gap-3">
           <Link
             href="/gallery"
-            className="px-2 sm:px-3 h-10 inline-flex items-center font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
+            className="inline-flex h-11 min-w-11 items-center justify-center px-2.5 font-body text-[11px] uppercase tracking-widest text-ink-soft/80 hover:text-ink transition-colors animate-press"
           >
             Gallery
           </Link>
           <Link
             href="#try"
-            className="hidden sm:inline-flex px-2 h-10 items-center font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
+            className="hidden sm:inline-flex h-11 items-center px-2.5 font-body text-[11px] uppercase tracking-widest text-ink-soft/80 hover:text-ink transition-colors animate-press"
           >
             Try it
           </Link>
           <Link
             href="/login"
-            className="px-3.5 h-10 inline-flex items-center bg-ink text-paper font-body text-[11px] uppercase tracking-widest hover:bg-ink-soft transition-colors"
+            className="ml-1 inline-flex h-11 items-center rounded-full bg-ink px-4 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft transition-colors animate-press"
           >
             Sign in
           </Link>
         </nav>
       </header>
 
-      {/* Hero */}
-      <section className="relative mb-12 overflow-hidden">
+      {/* Hero — mobile-first: tighter type scale, smaller blurs on phones
+          (they chew battery), larger CTA stack. */}
+      <section className="relative mb-10 overflow-hidden sm:mb-12">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-10 right-0 h-64 w-64 rounded-full bg-highlight/20 blur-3xl"
+          className="pointer-events-none absolute -top-6 right-[-20%] h-48 w-48 rounded-full bg-highlight/25 blur-2xl sm:-top-10 sm:right-0 sm:h-64 sm:w-64 sm:blur-3xl"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-0 h-48 w-48 rounded-full bg-sepia/20 blur-3xl"
+          className="pointer-events-none absolute bottom-0 left-[-10%] h-36 w-36 rounded-full bg-sepia/20 blur-2xl sm:h-48 sm:w-48 sm:blur-3xl"
         />
         <div className="relative">
-          <p className="font-body text-[11px] uppercase tracking-[0.28em] text-ink-soft/70">
+          <p className="font-body text-[10px] uppercase tracking-[0.28em] text-ink-soft/70 sm:text-[11px]">
             A studio in your pocket
           </p>
-          <h1 className="font-display text-[2.5rem] sm:text-6xl text-ink leading-[1.02] mt-4 tracking-tight">
-            Short films,{" "}
-            <span className="highlight">chained</span> scene by scene.
+          <h1 className="mt-3 font-display text-[2rem] leading-[1.05] tracking-tight text-ink sm:mt-4 sm:text-6xl sm:leading-[1.02]">
+            Short films, <span className="highlight">chained</span> scene by
+            scene.
           </h1>
-          <p className="font-body text-base sm:text-lg text-ink-soft/85 mt-5 max-w-xl leading-[1.55]">
-            A chat-driven filmmaking workspace. Talk the story through with an
-            AI director, build a storyboard, generate every frame with
-            gpt-image-2, animate with Seedance 2.0 or Kling, and stitch the
-            whole film in your browser.
+          <p className="mt-4 max-w-xl font-body text-[15px] leading-[1.55] text-ink-soft/85 sm:mt-5 sm:text-lg">
+            A chat-driven filmmaking workspace. Ari holds the thread while you
+            plan the story; Mae turns it into stills and shots. gpt-image-2 for
+            every frame, Seedance 2.0 or Kling for motion, stitched in your
+            browser.
           </p>
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Link href="/login" className="btn-primary">
+          <div className="mt-6 flex flex-col gap-2 sm:mt-7 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <Link href="/login" className="btn-primary w-full sm:w-auto">
               Start a film →
             </Link>
-            <Link href="/gallery" className="btn-secondary">
+            <Link href="/gallery" className="btn-secondary w-full sm:w-auto">
               Browse the gallery
             </Link>
-            <span className="font-body text-xs text-ink-soft/70">
+            <span className="text-center font-body text-xs text-ink-soft/70 sm:text-left">
               Free to try · no credit card
             </span>
           </div>
@@ -109,16 +110,16 @@ export default async function LandingPage() {
       </section>
 
       {/* Feature grid */}
-      <section className="mb-10 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <section className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Beat
           step="01"
-          title="Plan"
-          body="Chat builds the character sheet, the aesthetic bible, and the first scenes. Paste references any time."
+          title="Ari plans"
+          body="Tell Ari the story. She drafts the cast, the aesthetic, the through-line — with room for your taste on the calls that matter."
         />
         <Beat
           step="02"
-          title="Generate"
-          body="Scenes get a still with gpt-image-2 or Flux. A storyboard grid lets you approve tiles before animating."
+          title="Mae builds"
+          body="When the thread's tight, hand it to Mae. She fires character portraits and writes shot cards — gpt-image-2 stills, one tap each."
         />
         <Beat
           step="03"
@@ -127,14 +128,14 @@ export default async function LandingPage() {
         />
       </section>
 
-      <footer className="mt-auto pt-6 pb-safe border-t border-ink/10 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Logomark size={24} />
-          <span className="font-body text-[11px] uppercase tracking-widest text-ink-soft/70">
+      <footer className="pb-safe mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-ink/10 pt-5">
+        <div className="flex items-center gap-2">
+          <Logomark size={22} />
+          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/70 sm:text-[11px]">
             Nysus · after Dionysus
           </span>
         </div>
-        <div className="flex items-center gap-4 font-body text-[11px] uppercase tracking-widest text-ink-soft/70">
+        <div className="flex items-center gap-3 font-body text-[10px] uppercase tracking-widest text-ink-soft/70 sm:gap-4 sm:text-[11px]">
           <Link href="/gallery" className="hover:text-ink">
             Gallery
           </Link>

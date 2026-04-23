@@ -103,6 +103,12 @@ function AccountMenu({ email }: { email: string | null }) {
         >
           Gallery
         </Link>
+        <Link
+          href="/profile"
+          className="block px-3 py-2 font-body text-xs text-ink hover:bg-ink/5"
+        >
+          Profile
+        </Link>
         <form action="/auth/signout" method="post">
           <button
             type="submit"

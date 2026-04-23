@@ -22,32 +22,45 @@ export default async function ProjectPage({ params }: PageProps) {
   if (error) throw error;
   if (!project) notFound();
 
-  const [{ data: priorMessagesRaw }, { data: clipsRaw }] = await Promise.all([
-    supabase
-      .from("messages")
-      .select("id, role, content, created_at")
-      .eq("project_id", project.id)
-      .order("created_at", { ascending: true })
-      .limit(200),
-    supabase
-      .from("clips")
-      .select(
-        "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration, created_at",
-      )
-      .eq("project_id", project.id)
-      .order("order_index", { ascending: true }),
-  ]);
+  const [{ data: ariMessagesRaw }, { data: maeMessagesRaw }, { data: clipsRaw }] =
+    await Promise.all([
+      supabase
+        .from("messages")
+        .select("id, role, content, created_at")
+        .eq("project_id", project.id)
+        .eq("chat_mode", "ari")
+        .order("created_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("messages")
+        .select("id, role, content, created_at")
+        .eq("project_id", project.id)
+        .eq("chat_mode", "mae")
+        .order("created_at", { ascending: true })
+        .limit(200),
+      supabase
+        .from("clips")
+        .select(
+          "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration, created_at",
+        )
+        .eq("project_id", project.id)
+        .order("order_index", { ascending: true }),
+    ]);
 
-  const priorMessages: ChatMessage[] = (priorMessagesRaw ?? [])
-    .filter(
-      (m): m is {
-        id: string;
-        role: "user" | "assistant";
-        content: string;
-        created_at: string;
-      } => m.role === "user" || m.role === "assistant",
-    )
-    .map((m) => ({ id: m.id, role: m.role, content: m.content }));
+  const toChatMessages = (
+    rows:
+      | Array<{ id: string; role: string; content: string; created_at: string }>
+      | null,
+  ): ChatMessage[] =>
+    (rows ?? [])
+      .filter(
+        (m): m is { id: string; role: "user" | "assistant"; content: string; created_at: string } =>
+          m.role === "user" || m.role === "assistant",
+      )
+      .map((m) => ({ id: m.id, role: m.role, content: m.content }));
+
+  const initialAriMessages = toChatMessages(ariMessagesRaw);
+  const initialMaeMessages = toChatMessages(maeMessagesRaw);
 
   const initialClips: TimelineClip[] = (clipsRaw ?? []) as TimelineClip[];
 
@@ -59,7 +72,8 @@ export default async function ProjectPage({ params }: PageProps) {
       projectId={project.id}
       projectTitle={project.title}
       projectDescription={project.description}
-      initialMessages={priorMessages}
+      initialAriMessages={initialAriMessages}
+      initialMaeMessages={initialMaeMessages}
       initialClips={initialClips}
       updatedAt={project.updated_at}
       characterSheet={sheet}

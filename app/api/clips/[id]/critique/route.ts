@@ -138,13 +138,15 @@ export async function POST(_req: NextRequest, { params }: Params) {
     }
 
     // Store the critique as an assistant message scoped to the project
-    // so it shows up in the chat history too. (User can see "the chorus
-    // said…" in their transcript.)
+    // so it shows up in the chat history too. Critiques belong in
+    // Mae's thread — they're notes on what was BUILT, not what's
+    // being PLANNED.
     await admin.from("messages").insert({
       project_id: clip.project_id,
       role: "assistant",
       content: `*Consulted the chorus on shot #${clip.shot_metadata?.shot_number ?? ""}*\n\n${out}`,
       attached_frame_urls: frameUrls,
+      chat_mode: "mae",
     });
 
     void recordUsage({

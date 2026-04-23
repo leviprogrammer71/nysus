@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChatPanel } from "./chat/chat-panel";
+import { DualChat } from "./chat/dual-chat";
 import type { ChatMessage } from "./chat/message";
 import { Timeline } from "./timeline/timeline";
 import { ClipDetailSheet } from "./timeline/clip-detail-sheet";
@@ -24,7 +24,8 @@ export function Workspace({
   projectId,
   projectTitle,
   projectDescription,
-  initialMessages,
+  initialAriMessages,
+  initialMaeMessages,
   initialClips,
   updatedAt,
   characterSheet,
@@ -33,7 +34,8 @@ export function Workspace({
   projectId: string;
   projectTitle: string;
   projectDescription: string | null;
-  initialMessages: ChatMessage[];
+  initialAriMessages: ChatMessage[];
+  initialMaeMessages: ChatMessage[];
   initialClips: TimelineClip[];
   updatedAt: string;
   characterSheet: CharacterSheet;
@@ -188,7 +190,7 @@ export function Workspace({
   ).length;
 
   return (
-    <main className="min-h-screen flex flex-col px-4 sm:px-6 py-6 max-w-4xl mx-auto w-full">
+    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 sm:px-6 md:pb-8">
       {/* Breadcrumb + toolbar — workstation style. Tabs live in the
           primary nav (BottomNav on mobile, Dashboard link in corner). */}
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 pb-3">
@@ -246,28 +248,21 @@ export function Workspace({
         </div>
       </section>
 
-      {/* Chat comes FIRST — it's the driver for everything else. Stills,
-          timeline, and the sheets all read as derivatives of whatever
-          Dio just drafted. */}
+      {/* Chat comes FIRST — it's the driver for everything else.
+          Two panes: Ari plans and Mae builds. User swipes between
+          them on mobile, sees both on desktop. */}
       <KeepRolling clips={clips} />
-      <section id="chat" className="mb-8 scroll-mt-20">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-display text-base uppercase tracking-widest text-ink">
-            Chat
-          </h2>
-          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
-            Dio · the director
-          </span>
-        </div>
-        <ChatPanel
+      <section id="chat" className="scroll-mt-20">
+        <DualChat
           projectId={projectId}
-          initialMessages={initialMessages}
+          initialAriMessages={initialAriMessages}
+          initialMaeMessages={initialMaeMessages}
           onGenerate={generateFromShot}
         />
         {genError ? (
           <p
             aria-live="polite"
-            className="mt-3 rounded border border-red-grease bg-paper px-3 py-2 font-body text-sm text-red-grease"
+            className="mb-6 rounded border border-red-grease bg-paper px-3 py-2 font-body text-sm text-red-grease"
           >
             {genError}
           </p>

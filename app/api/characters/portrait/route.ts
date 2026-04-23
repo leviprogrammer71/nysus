@@ -38,8 +38,8 @@ const bodySchema = z.object({
  * and appended to that character's reference_images list so every
  * subsequent chat turn sees it labeled ('<name> reference:').
  *
- * Uses OpenAI gpt-image-1 when OPENAI_API_KEY is set, falls back to
- * Replicate Flux.
+ * Uses Replicate's openai/gpt-image-2 as the single image provider.
+ * REPLICATE_API_TOKEN must be set.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();

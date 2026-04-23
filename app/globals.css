@@ -417,6 +417,16 @@ h1.font-display, h2.font-display, h3.font-display {
   transform: translateY(0);
 }
 
+/* Hide the scrollbar on snap-scrollers where the UI controls paging
+   (e.g. the Ari ↔ Mae switcher). Keep the scroll behavior; just don't
+   render the bar. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Safari / Chrome / Edge */
+}
+
 /* Gradient shimmer for loading skeletons. */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

@@ -15,6 +15,7 @@ export type ClipStatus = "queued" | "processing" | "complete" | "failed";
 export type StillStatus = "none" | "queued" | "processing" | "complete" | "failed";
 export type SeedSource = "auto" | "manual_frame" | "upload" | "none";
 export type MessageRole = "user" | "assistant" | "system";
+export type ChatMode = "ari" | "mae";
 
 export interface CharacterSheet {
   characters?: {
@@ -230,6 +231,7 @@ type MessagesTable = {
     role: MessageRole;
     content: string;
     attached_frame_urls: string[];
+    chat_mode: ChatMode;
     created_at: string;
   };
   Insert: {
@@ -238,6 +240,7 @@ type MessagesTable = {
     role: MessageRole;
     content: string;
     attached_frame_urls?: string[];
+    chat_mode?: ChatMode;
     created_at?: string;
   };
   Update: {
@@ -246,6 +249,7 @@ type MessagesTable = {
     role?: MessageRole;
     content?: string;
     attached_frame_urls?: string[];
+    chat_mode?: ChatMode;
     created_at?: string;
   };
   Relationships: [
@@ -403,6 +407,40 @@ type UserAchievementsTable = {
   Relationships: [];
 };
 
+type UserProfilesTable = {
+  Row: {
+    user_id: string;
+    display_name: string | null;
+    handle: string | null;
+    bio: string | null;
+    avatar_path: string | null;
+    website: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    user_id: string;
+    display_name?: string | null;
+    handle?: string | null;
+    bio?: string | null;
+    avatar_path?: string | null;
+    website?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: {
+    user_id?: string;
+    display_name?: string | null;
+    handle?: string | null;
+    bio?: string | null;
+    avatar_path?: string | null;
+    website?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Relationships: [];
+};
+
 type GalleryLikesTable = {
   Row: {
     id: string;
@@ -441,6 +479,7 @@ export interface Database {
       user_progress: UserProgressTable;
       user_achievements: UserAchievementsTable;
       gallery_likes: GalleryLikesTable;
+      user_profiles: UserProfilesTable;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

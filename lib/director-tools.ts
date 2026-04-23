@@ -89,6 +89,17 @@ const aestheticBibleSchema: JsonSchema = {
   },
 };
 
+/**
+ * Tool subsets for the Ari (planner) / Mae (executor) split.
+ *
+ *   ARI_TOOLS — everything Ari can write to the project state. No
+ *               money-spending actions. If Ari tries to trigger a
+ *               portrait, the model should say "that's Mae's side."
+ *   MAE_TOOLS — all of Ari's tools plus generate_character_portrait.
+ *
+ * Exported computed below once DIRECTOR_TOOLS is defined.
+ */
+
 export const DIRECTOR_TOOLS: ToolDefinition[] = [
   {
     type: "function",
@@ -196,6 +207,14 @@ export const DIRECTOR_TOOLS: ToolDefinition[] = [
     },
   },
 ];
+
+/** Tools exposed to Ari — no money-spending actions. */
+export const ARI_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS.filter(
+  (t) => t.function.name !== "generate_character_portrait",
+);
+
+/** Tools exposed to Mae — full set including portrait generation. */
+export const MAE_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
 
 // --- Tool executor -------------------------------------------------
 

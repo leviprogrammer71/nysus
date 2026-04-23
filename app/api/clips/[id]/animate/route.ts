@@ -20,8 +20,8 @@ type Params = { params: Promise<{ id: string }> };
  *
  * Routes to Seedance or Kling based on shot_metadata.animation_model
  * (and a hard guardrail: realistic projects are always Seedance).
- * Uses the clip's own still as the seed so each scene animates from
- * its generated frame (OpenAI gpt-image-1 or Flux).
+ * Uses the clip's own gpt-image-2 still as the seed so each scene
+ * animates from its generated frame.
  */
 export async function POST(_req: NextRequest, { params }: Params) {
   const { id } = await params;

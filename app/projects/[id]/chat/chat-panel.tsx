@@ -12,10 +12,18 @@ export function ChatPanel({
   projectId,
   initialMessages,
   onGenerate,
+  mode = "ari",
+  prefillEventName = "nysus:prefill-chat",
 }: {
   projectId: string;
   initialMessages: ChatMessage[];
   onGenerate?: (shot: ShotPrompt) => Promise<void>;
+  /** Which half of the director to address. Defaults to Ari (planner). */
+  mode?: "ari" | "mae";
+  /** Custom event name this panel listens for when another component
+   *  wants to prefill its textarea. Each panel uses a unique name so
+   *  side-by-side Ari + Mae don't steal each other's input. */
+  prefillEventName?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -63,12 +71,14 @@ export function ChatPanel({
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // Auto-resize textarea up to a cap.
+  // Auto-resize textarea between a comfortable floor (2 lines) and a
+  // reasonable ceiling. Floor matches the minHeight on the element so
+  // the box never collapses to one line.
   const autoSizeInput = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "0px";
-    const next = Math.min(el.scrollHeight, 240);
+    const next = Math.max(64, Math.min(el.scrollHeight, 240));
     el.style.height = `${next}px`;
   }, []);
 
@@ -79,9 +89,8 @@ export function ChatPanel({
     return () => abortRef.current?.abort();
   }, []);
 
-  // Prefill listener — the Workspace "keep rolling" nudge dispatches
-  // 'nysus:prefill-chat' with a suggested next-shot prompt. We drop it
-  // into the textarea and focus so the user can confirm/edit/send.
+  // Prefill listener. Each pane subscribes to a unique event name so
+  // Ari and Mae can coexist without fighting over the same inbox.
   useEffect(() => {
     const onPrefill = (e: Event) => {
       const detail = (e as CustomEvent<{ text?: string }>).detail;
@@ -89,9 +98,9 @@ export function ChatPanel({
       setInput((prev) => (prev ? `${prev.trimEnd()} ${detail.text}` : detail.text!));
       setTimeout(() => textareaRef.current?.focus(), 0);
     };
-    window.addEventListener("nysus:prefill-chat", onPrefill);
-    return () => window.removeEventListener("nysus:prefill-chat", onPrefill);
-  }, []);
+    window.addEventListener(prefillEventName, onPrefill);
+    return () => window.removeEventListener(prefillEventName, onPrefill);
+  }, [prefillEventName]);
 
   const uploadAttachment = useCallback(
     async (file: File) => {
@@ -205,8 +214,13 @@ export function ChatPanel({
   ) => {
     const text = rawText.trim();
     if (!text || streaming) return;
-    // Block send while uploads are in flight.
-    if (attachments.some((a) => a.uploading)) return;
+    // Block send while uploads are in flight — and SAY so.
+    if (attachments.some((a) => a.uploading)) {
+      setError(
+        "Still uploading an attachment — give it a second and try again.",
+      );
+      return;
+    }
 
     if ("vibrate" in navigator) navigator.vibrate?.(6);
     setError(null);
@@ -244,6 +258,7 @@ export function ChatPanel({
         body: JSON.stringify({
           project_id: projectId,
           message: messageToSend,
+          mode,
           ...(attachedUrls.length > 0
             ? { attached_image_urls: attachedUrls }
             : {}),
@@ -324,17 +339,22 @@ export function ChatPanel({
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex flex-col bg-paper-deep border border-ink/10 h-[min(70svh,720px)]">
+    <div className="flex flex-col rounded-lg border border-ink/10 bg-paper-deep h-[min(60svh,560px)] md:h-[min(70svh,720px)]">
       <div
         ref={scrollerRef}
         className="flex-1 overflow-y-auto px-5 py-6 space-y-6 scroll-smooth"
       >
         {hasMessages ? (
           messages.map((m) => (
-            <MessageBubble key={m.id} message={m} onGenerate={onGenerate} />
+            <MessageBubble
+              key={m.id}
+              message={m}
+              onGenerate={onGenerate}
+              speaker={mode === "mae" ? "Mae" : "Ari"}
+            />
           ))
         ) : (
-          <DioGreeting />
+          <ModeGreeting mode={mode} />
         )}
 
         {error ? (
@@ -357,7 +377,7 @@ export function ChatPanel({
         }}
         onDragLeave={() => setDragActive(false)}
         onDrop={handleDrop}
-        className={`relative border-t bg-paper px-4 py-3 pb-safe-plus-3 transition-colors ${
+        className={`relative border-t bg-paper px-3 py-3 pb-safe-plus-3 rounded-b-lg transition-colors sm:px-4 ${
           dragActive ? "border-sepia-deep bg-paper-deep" : "border-ink/10"
         }`}
       >
@@ -421,7 +441,7 @@ export function ChatPanel({
           }}
         />
 
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-1.5 sm:gap-3">
           <button
             type="button"
             aria-label={
@@ -521,10 +541,14 @@ export function ChatPanel({
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="say it to the director…"
-            rows={1}
+            placeholder={mode === "mae" ? "tell Mae what to build…" : "tell Ari the story…"}
+            rows={2}
             disabled={streaming}
-            className="flex-1 resize-none bg-paper-deep border border-ink/20 focus:border-ink px-3 py-2 font-body text-ink placeholder:text-ink-soft/40 outline-none transition-colors"
+            enterKeyHint="send"
+            autoCapitalize="sentences"
+            autoCorrect="on"
+            style={{ minHeight: "64px" }}
+            className="flex-1 min-w-0 resize-none rounded-md bg-paper-deep border border-ink/20 focus:border-ink px-3 py-2.5 font-body text-[15px] leading-[1.4] text-ink placeholder:text-ink-soft/40 outline-none transition-colors"
           />
 
           {streaming ? (
@@ -538,10 +562,53 @@ export function ChatPanel({
           ) : (
             <button
               type="submit"
-              disabled={!input.trim()}
-              className="shrink-0 px-4 h-10 bg-ink text-paper font-body text-sm tracking-wide hover:bg-ink-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              disabled={!input.trim() || attachments.some((a) => a.uploading)}
+              aria-label={
+                attachments.some((a) => a.uploading)
+                  ? "Waiting for upload to finish"
+                  : "Send"
+              }
+              title={
+                attachments.some((a) => a.uploading)
+                  ? "Waiting for the attachment to finish uploading…"
+                  : undefined
+              }
+              className="shrink-0 inline-flex items-center justify-center h-10 min-w-10 rounded-full bg-ink px-3 sm:px-4 text-paper font-body text-sm tracking-wide hover:bg-ink-soft disabled:opacity-40 disabled:cursor-not-allowed animate-press"
             >
-              Send &rarr;
+              {attachments.some((a) => a.uploading) ? (
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className="animate-icon-spin"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.2-8.55" />
+                </svg>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Send &rarr;</span>
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="sm:hidden"
+                  >
+                    <path d="M3 12 21 3l-9 18-2-7.5z" />
+                    <path d="m10.5 13.5 10.5-10.5" />
+                  </svg>
+                </>
+              )}
             </button>
           )}
         </div>
@@ -573,34 +640,63 @@ export function ChatPanel({
 }
 
 /**
- * Pre-first-message greeting. Dio introduces himself with the
- * animated logomark. This is the "reflection" — every time you see
- * Dio, his mark moves.
+ * Pre-first-message greeting. Ari opens the conversation pane with a
+ * planning offer; Mae opens the execution pane with a builder stance.
+ * The logomark animates on both — every time you see the director,
+ * the mark moves.
  */
-function DioGreeting() {
+function ModeGreeting({ mode }: { mode: "ari" | "mae" }) {
+  if (mode === "mae") {
+    return (
+      <div className="flex gap-3">
+        <div className="shrink-0 mt-0.5">
+          <Logomark size={28} animated />
+        </div>
+        <div className="flex-1">
+          <div className="mb-2 flex items-center gap-2 font-hand text-sepia-deep text-base">
+            <span>Mae</span>
+          </div>
+          <div className="space-y-3 font-body text-ink leading-relaxed">
+            <p>
+              I build what Ari and you worked out. Once the cast and the
+              aesthetic are set, I&rsquo;ll draft scene cards and fire
+              character portraits so every shot lands consistent.
+            </p>
+            <p>
+              Each card gives you a{" "}
+              <span className="font-hand text-sepia-deep">still</span> and an{" "}
+              <span className="font-hand text-sepia-deep">animate</span> tap.
+              I don&rsquo;t touch either button — you do, when you&rsquo;re
+              ready.
+            </p>
+            <p className="font-hand text-ink-soft">
+              send me a plan from Ari when you&rsquo;re set.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex gap-3">
       <div className="shrink-0 mt-0.5">
         <Logomark size={28} animated />
       </div>
       <div className="flex-1">
-        <div className="flex items-center gap-2 mb-2 font-hand text-sepia-deep text-base">
-          <span>Dio</span>
+        <div className="mb-2 flex items-center gap-2 font-hand text-sepia-deep text-base">
+          <span>Ari</span>
         </div>
-        <div className="font-body text-ink space-y-3 leading-relaxed">
+        <div className="space-y-3 font-body text-ink leading-relaxed">
           <p>
-            I&rsquo;m Dio &mdash; your director. Tell me the story, a sentence
-            is enough. I&rsquo;ll draft the cast, the aesthetic bible, and the
-            first few scenes from it.
+            Tell me what you&rsquo;re making. A sentence is enough. I&rsquo;ll
+            draft the cast, the aesthetic, and the through-line, and we&rsquo;ll
+            shape it together.
           </p>
           <p>
-            Each scene gives you an{" "}
-            <span className="font-hand text-sepia-deep">image prompt</span>,
-            an{" "}
-            <span className="font-hand text-sepia-deep">animation prompt</span>,
-            and the{" "}
-            <span className="font-hand text-sepia-deep">narration</span>. You
-            pick what to generate, when.
+            I don&rsquo;t build anything here &mdash; I plan. When the thread
+            feels tight, you hand it to{" "}
+            <span className="font-hand text-sepia-deep">Mae</span> and she
+            turns it into shot cards.
           </p>
           <p className="font-hand text-ink-soft">what are we making?</p>
         </div>

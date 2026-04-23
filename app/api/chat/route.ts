@@ -9,11 +9,13 @@ import {
   type OpenRouterMessage,
   type OpenRouterToolCall,
 } from "@/lib/openrouter";
+import { ARI_SYSTEM_PROMPT, buildAriContextSuffix } from "@/lib/prompts/ari";
+import { MAE_SYSTEM_PROMPT } from "@/lib/prompts/mae";
 import {
-  DIRECTOR_SYSTEM_PROMPT,
-  buildProjectContextSuffix,
-} from "@/lib/prompts/director";
-import { DIRECTOR_TOOLS, executeDirectorTool } from "@/lib/director-tools";
+  ARI_TOOLS,
+  MAE_TOOLS,
+  executeDirectorTool,
+} from "@/lib/director-tools";
 import { collectLabeledRefs } from "@/lib/references";
 import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
@@ -25,6 +27,8 @@ const bodySchema = z.object({
   project_id: z.string().uuid(),
   message: z.string().trim().min(1).max(8000),
   attached_image_urls: z.array(z.string().url()).max(8).optional(),
+  /** Which half of the director the message is going to. Defaults to Ari (planner). */
+  mode: z.enum(["ari", "mae"]).default("ari"),
 });
 
 const HISTORY_LIMIT = 40;
@@ -66,6 +70,7 @@ export async function POST(request: NextRequest) {
     .from("messages")
     .select("role, content")
     .eq("project_id", project.id)
+    .eq("chat_mode", body.mode)
     .order("created_at", { ascending: true })
     .limit(HISTORY_LIMIT);
 
@@ -90,6 +95,7 @@ export async function POST(request: NextRequest) {
       role: "user",
       content: body.message,
       attached_frame_urls: attachedImageUrls,
+      chat_mode: body.mode,
     })
     .select("id, created_at")
     .single();
@@ -119,7 +125,7 @@ export async function POST(request: NextRequest) {
     const sheet = (data?.character_sheet ?? project!.character_sheet ?? {}) as CharacterSheet;
     const bible = (data?.aesthetic_bible ?? project!.aesthetic_bible ?? {}) as AestheticBible;
 
-    const suffix = buildProjectContextSuffix({
+    const suffix = buildAriContextSuffix({
       title: data?.title ?? project!.title,
       character_sheet: sheet,
       aesthetic_bible: bible,
@@ -181,8 +187,12 @@ export async function POST(request: NextRequest) {
         content: `${body.message}\n${initialContextSuffix}`,
       };
 
+  const systemPrompt =
+    body.mode === "mae" ? MAE_SYSTEM_PROMPT : ARI_SYSTEM_PROMPT;
+  const tools = body.mode === "mae" ? MAE_TOOLS : ARI_TOOLS;
+
   const baseHistory: OpenRouterMessage[] = [
-    { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     ...(priorMessages ?? [])
       .filter(
         (m): m is { role: "user" | "assistant"; content: string } =>
@@ -216,7 +226,7 @@ export async function POST(request: NextRequest) {
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const upstream = await streamChatCompletion({
             messages,
-            tools: DIRECTOR_TOOLS,
+            tools,
           });
 
           let collectedToolCalls: OpenRouterToolCall[] = [];
@@ -341,6 +351,7 @@ export async function POST(request: NextRequest) {
               project_id: project!.id,
               role: "assistant",
               content: accumulated,
+              chat_mode: body.mode,
             })
             .then(({ error }) => {
               if (error) {
@@ -362,6 +373,7 @@ export async function POST(request: NextRequest) {
             has_attachments: attachedImageUrls.length > 0,
             attachment_count: attachedImageUrls.length,
             tool_loop: true,
+            mode: body.mode,
           },
         });
       }

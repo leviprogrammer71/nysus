@@ -7,8 +7,8 @@ import type { ShotPrompt } from "@/lib/shot-prompt";
  * Scene card rendered in place of a ```json-shot fence.
  *
  * Two sequential actions per scene:
- *   1. Generate still — calls Flux via /api/stills/generate and
- *      renders the preview when it lands.
+ *   1. Generate still — calls gpt-image-2 via /api/stills/generate
+ *      and renders the preview when it lands.
  *   2. Animate — calls /api/generate using the still as the seed
  *      and hands off to the workspace timeline.
  *
@@ -118,7 +118,7 @@ export function ShotCard({
       </header>
 
       <div className="px-4 py-3 space-y-4">
-        {/* Image prompt — for Flux */}
+        {/* Image prompt — for gpt-image-2 */}
         {hasImagePrompt ? (
           <section>
             <div className="flex items-baseline justify-between mb-1">
@@ -167,7 +167,7 @@ export function ShotCard({
           </section>
         ) : null}
 
-        {/* Still preview once Flux lands */}
+        {/* Still preview once gpt-image-2 lands */}
         {stillStatus === "ready" && stillUrl ? (
           <div className="border border-ink/10 bg-paper-deep p-2">
             <p className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60 mb-2">

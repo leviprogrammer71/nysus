@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Project-level draft-mode switch. When on, stills route to a cheaper
- * Flux/DALL-E variant and videos use Seedance Lite. Great for sketching
- * a 6-shot sequence before committing to the expensive models.
+ * Project-level draft-mode switch. When on, stills route to
+ * gpt-image-2 at "low" quality (1:1 square) and videos use Seedance
+ * Lite. Great for sketching a 6-shot sequence before committing to
+ * the expensive models.
  */
 export function DraftModeToggle({ projectId }: { projectId: string }) {
   const [on, setOn] = useState<boolean | null>(null);

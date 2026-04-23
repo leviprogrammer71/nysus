@@ -123,13 +123,15 @@ export function BottomNav() {
   });
 
   if (onProjectPage && projectId) {
+    // Scenes — the generated stills + video clips grid.
     items.push({
-      key: "timeline",
-      label: "Timeline",
+      key: "scenes",
+      label: "Scenes",
       icon: <IconReel />,
       anchor: onStitch || onEdit ? undefined : "timeline",
-      href: onStitch || onEdit ? `/projects/${projectId}` : undefined,
+      href: onStitch || onEdit ? `/projects/${projectId}#timeline` : undefined,
     });
+    // Chat — Ari + Mae, the director pair.
     items.push({
       key: "chat",
       label: "Chat",

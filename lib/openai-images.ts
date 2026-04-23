@@ -9,7 +9,7 @@ import { createPrediction, fetchReplicateOutputAsBlob, getPrediction } from "@/l
  *
  * The input shape here matches Replicate's schema for this model, NOT
  * OpenAI's native /v1/images/generations shape. Specifically:
- *   - aspect_ratio  (e.g. "9:16"), not `size` (e.g. "1024x1536")
+ *   - aspect_ratio  ("1:1" | "3:2" | "2:3"), not `size` (e.g. "1024x1536")
  *   - number_of_images, not `n`
  *   - quality:  "auto" | "low" | "medium" | "high"
  *   - output_format: "png" | "jpg" | "webp"
@@ -35,25 +35,30 @@ export const OPENAI_IMAGE_QUALITY =
 
 /**
  * Normalize the app's aspect_ratio values to ones gpt-image-2 accepts.
- * The model accepts free-form ratios; we pass through common ones and
- * map the less common app values to their nearest native bucket.
+ * Replicate's gpt-image-2 currently only accepts: "1:1", "3:2", "2:3".
+ * Map everything else to the closest match.
  */
 function gptImageAspect(aspect: string): string {
-  // gpt-image-2 accepts: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 4:5, 5:4, 21:9.
-  // Our app uses 9:16, 16:9, 1:1, 4:3, 3:4, 21:9. All pass through.
-  const supported = new Set([
-    "1:1",
-    "2:3",
-    "3:2",
-    "3:4",
-    "4:3",
-    "9:16",
-    "16:9",
-    "4:5",
-    "5:4",
-    "21:9",
-  ]);
-  return supported.has(aspect) ? aspect : "9:16";
+  // Direct pass-through for the three accepted values.
+  const supported = new Set(["1:1", "3:2", "2:3"]);
+  if (supported.has(aspect)) return aspect;
+
+  // Map common app ratios to the nearest accepted bucket.
+  // Portrait-ish (taller than wide) → "2:3"
+  // Landscape-ish (wider than tall)  → "3:2"
+  // Square                           → "1:1"
+  const portraitLike = new Set(["9:16", "3:4", "4:5"]);
+  const landscapeLike = new Set(["16:9", "4:3", "5:4", "21:9"]);
+  if (portraitLike.has(aspect)) return "2:3";
+  if (landscapeLike.has(aspect)) return "3:2";
+
+  // Fallback: parse the ratio and pick based on orientation.
+  const [a, b] = aspect.split(":").map(Number);
+  if (a && b) {
+    if (a === b) return "1:1";
+    return a < b ? "2:3" : "3:2";
+  }
+  return "2:3"; // app default is portrait
 }
 
 export function hasOpenAIImageKey(): boolean {

@@ -78,9 +78,12 @@ function splitAssistantContent(content: string): AssistantSegment[] {
 export function MessageBubble({
   message,
   onGenerate,
+  speaker = "Ari",
 }: {
   message: ChatMessage;
   onGenerate?: (shot: ShotPrompt) => Promise<void>;
+  /** Display name for the assistant bubble header — "Ari" or "Mae". */
+  speaker?: string;
 }) {
   if (message.role === "user") {
     return (
@@ -105,7 +108,7 @@ export function MessageBubble({
       </div>
       <div className="max-w-[92%] flex-1">
         <div className="flex items-center gap-2 mb-1 font-hand text-sepia-deep text-base">
-          <span>Dio</span>
+          <span>{speaker}</span>
           {message.streaming ? (
             <span
               className="inline-block w-1.5 h-3.5 bg-ink align-middle animate-pulse"
