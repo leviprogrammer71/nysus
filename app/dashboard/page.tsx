@@ -4,6 +4,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { deleteProject } from "@/app/actions";
 import { AppTopbar } from "@/app/components/app-topbar";
 import { UsageMeter } from "@/app/components/usage-meter";
+import { ProgressPanel } from "@/app/components/progress-panel";
 import { PushOptIn } from "@/app/components/push-optin";
 import { ProjectCard } from "@/app/components/project-card";
 import { GalleryStrip } from "@/app/components/gallery-strip";
@@ -106,6 +107,7 @@ export default async function DashboardPage() {
       </section>
 
       <PushOptIn />
+      <ProgressPanel />
       <UsageMeter />
 
       {/* Stats strip — compact, no highlight typography */}

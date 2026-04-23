@@ -79,6 +79,20 @@ export function ChatPanel({
     return () => abortRef.current?.abort();
   }, []);
 
+  // Prefill listener — the Workspace "keep rolling" nudge dispatches
+  // 'nysus:prefill-chat' with a suggested next-shot prompt. We drop it
+  // into the textarea and focus so the user can confirm/edit/send.
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const detail = (e as CustomEvent<{ text?: string }>).detail;
+      if (!detail?.text) return;
+      setInput((prev) => (prev ? `${prev.trimEnd()} ${detail.text}` : detail.text!));
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    };
+    window.addEventListener("nysus:prefill-chat", onPrefill);
+    return () => window.removeEventListener("nysus:prefill-chat", onPrefill);
+  }, []);
+
   const uploadAttachment = useCallback(
     async (file: File) => {
       const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

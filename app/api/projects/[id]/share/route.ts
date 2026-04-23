@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated } from "@/lib/auth";
+import { awardEvent } from "@/lib/progress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,6 +77,18 @@ export async function POST(request: NextRequest, { params }: Params) {
     .eq("id", id);
   if (updErr) {
     return NextResponse.json({ error: updErr.message }, { status: 500 });
+  }
+
+  // XP hook — only on transitions into enabled so repeated toggles
+  // don't farm points.
+  if (enabled && !current.share_enabled) {
+    const admin = createServiceRoleClient();
+    void awardEvent({
+      admin,
+      userId: user.id,
+      kind: "project_shared",
+      meta: { project_id: id },
+    });
   }
 
   return NextResponse.json({

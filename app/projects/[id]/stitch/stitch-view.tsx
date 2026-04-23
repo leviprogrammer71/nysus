@@ -12,11 +12,23 @@ import type { TimelineClip } from "../timeline/types";
  * Narration and captions are opt-in toggles because the extra passes
  * re-encode video and can take noticeably longer on phones.
  */
+interface StitchCelebration {
+  scene_count: number;
+  duration_sec: number;
+  models: string[];
+  blob_url: string;
+  new_achievements?: Array<{ slug: string; label: string; glyph: string }>;
+  level?: number;
+  streak_days?: number;
+}
+
 export function StitchView({
   clips: initialClips,
+  projectId,
   projectTitle,
 }: {
   clips: TimelineClip[];
+  projectId: string;
   projectTitle: string;
 }) {
   const [clips, setClips] = useState<TimelineClip[]>(initialClips);
@@ -24,6 +36,7 @@ export function StitchView({
   const [error, setError] = useState<string | null>(null);
   const [withNarration, setWithNarration] = useState(true);
   const [withCaptions, setWithCaptions] = useState(true);
+  const [celebration, setCelebration] = useState<StitchCelebration | null>(null);
 
   const ready = useMemo(
     () => clips.filter((c) => c.status === "complete"),
@@ -160,16 +173,76 @@ export function StitchView({
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
-      setProgress("done");
-      setTimeout(() => setProgress(null), 3000);
+      // Compute stats for the celebration card.
+      const totalDuration = durations.reduce((s, d) => s + d, 0) || 0;
+      const modelsUsed = Array.from(
+        new Set(
+          ready
+            .map(
+              (c) =>
+                (c.shot_metadata?.animation_model as string | undefined) ??
+                "seedance",
+            )
+            .filter(Boolean),
+        ),
+      );
+
+      // Ping the server so XP + achievements fire.
+      let awardProgress: {
+        level?: number;
+        streak_days?: number;
+        new_achievements?: Array<{
+          slug: string;
+          label: string;
+          glyph: string;
+        }>;
+      } | null = null;
+      try {
+        const res = await fetch("/api/events/stitch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            scene_count: ready.length,
+            duration_sec: totalDuration,
+          }),
+        });
+        if (res.ok) {
+          const body = (await res.json()) as {
+            progress?: {
+              level: number;
+              streak_days: number;
+              new_achievements: Array<{
+                slug: string;
+                label: string;
+                glyph: string;
+              }>;
+            };
+          };
+          awardProgress = body.progress ?? null;
+        }
+      } catch {
+        /* ignore — XP is a nice-to-have */
+      }
+
+      setCelebration({
+        scene_count: ready.length,
+        duration_sec: totalDuration,
+        models: modelsUsed,
+        blob_url: url,
+        level: awardProgress?.level,
+        streak_days: awardProgress?.streak_days,
+        new_achievements: awardProgress?.new_achievements,
+      });
+
+      setProgress(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       setProgress(null);
     }
-  }, [ready, projectTitle, withNarration, withCaptions, anyCaptionText]);
+  }, [ready, projectId, projectTitle, withNarration, withCaptions, anyCaptionText]);
 
   return (
     <div className="space-y-8">
@@ -293,6 +366,14 @@ export function StitchView({
             </p>
           ) : null}
 
+          {celebration ? (
+            <CelebrationCard
+              projectId={projectId}
+              celebration={celebration}
+              onClose={() => setCelebration(null)}
+            />
+          ) : null}
+
           <p className="font-body text-xs text-ink-soft/60 leading-relaxed">
             Export runs in your browser via FFmpeg.wasm. Narration audio and
             captions are mixed locally too — the signed URLs fetch each clip
@@ -300,6 +381,183 @@ export function StitchView({
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+function CelebrationCard({
+  projectId,
+  celebration,
+  onClose,
+}: {
+  projectId: string;
+  celebration: StitchCelebration;
+  onClose: () => void;
+}) {
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const share = useCallback(async () => {
+    setSharing(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enable" }),
+      });
+      const body = await res.json();
+      if (res.ok && body.url) {
+        const full = `${window.location.origin}${body.url}`;
+        setShareUrl(full);
+        try {
+          await navigator.clipboard.writeText(full);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2500);
+        } catch {
+          /* fine — the URL is shown either way */
+        }
+      }
+    } finally {
+      setSharing(false);
+    }
+  }, [projectId]);
+
+  const mins = Math.floor(celebration.duration_sec / 60);
+  const secs = Math.round(celebration.duration_sec % 60);
+
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-ink/20 bg-paper-deep p-5 animate-reveal is-visible">
+      <FallingPetals />
+      <div className="relative">
+        <div className="flex items-baseline justify-between">
+          <h3 className="font-display text-xl text-ink">
+            Cut. Printed. <span className="highlight">Wrap.</span>
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss"
+            className="font-display text-xl text-ink-soft hover:text-ink"
+          >
+            ×
+          </button>
+        </div>
+        <p className="mt-1 font-hand text-base text-sepia-deep">
+          Your film is saving to your downloads now.
+        </p>
+        <dl className="mt-4 grid grid-cols-3 gap-2">
+          <Stat label="Scenes" value={`${celebration.scene_count}`} />
+          <Stat
+            label="Runtime"
+            value={mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
+          />
+          <Stat label="Models" value={celebration.models.join(" · ") || "—"} />
+        </dl>
+
+        {celebration.new_achievements && celebration.new_achievements.length > 0 ? (
+          <div className="mt-4 rounded-md border border-ink/15 bg-paper/80 p-3">
+            <p className="font-body text-[11px] uppercase tracking-widest text-ink-soft/70">
+              New stamps unlocked
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {celebration.new_achievements.map((a) => (
+                <li
+                  key={a.slug}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-ink/25 bg-paper px-2 py-1 font-body text-[11px] text-ink"
+                >
+                  <span className="font-display text-base">{a.glyph}</span>
+                  {a.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <a
+            href={celebration.blob_url}
+            download
+            className="inline-flex h-10 items-center rounded-full bg-ink px-4 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft animate-press"
+          >
+            Save again
+          </a>
+          <button
+            type="button"
+            onClick={share}
+            disabled={sharing}
+            className="inline-flex h-10 items-center rounded-full border border-ink/25 bg-paper px-4 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-ink/5 animate-press disabled:opacity-60"
+          >
+            {sharing
+              ? "…"
+              : copied
+              ? "Link copied"
+              : shareUrl
+              ? "Copy share link"
+              : "Share this film"}
+          </button>
+          {celebration.level ? (
+            <span className="font-body text-[11px] uppercase tracking-widest text-ink-soft/70">
+              LV {celebration.level}
+              {celebration.streak_days
+                ? ` · ${celebration.streak_days}-day streak`
+                : ""}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-ink/10 bg-paper px-3 py-2">
+      <p className="font-display text-lg text-ink leading-none">{value}</p>
+      <p className="mt-1 font-body text-[10px] uppercase tracking-widest text-ink-soft/70">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+/** Restrained "paper petal" flourish that fits the Director's Desk look. */
+function FallingPetals() {
+  const petals = Array.from({ length: 12 });
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      {petals.map((_, i) => (
+        <span
+          key={i}
+          className="absolute block h-1.5 w-3 rounded-sm bg-sepia/40"
+          style={{
+            left: `${(i * 7 + 3) % 100}%`,
+            top: "-10%",
+            transform: `rotate(${(i * 17) % 180}deg)`,
+            animation: `petal-fall 3.2s ${
+              (i * 0.15).toFixed(2)
+            }s ease-in forwards`,
+          }}
+        />
+      ))}
+      <style jsx>{`
+        @keyframes petal-fall {
+          0% {
+            transform: translateY(0) rotate(0deg);
+            opacity: 0.9;
+          }
+          80% {
+            opacity: 0.9;
+          }
+          100% {
+            transform: translateY(220px) rotate(180deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 }

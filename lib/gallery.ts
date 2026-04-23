@@ -12,6 +12,7 @@ export interface GalleryEntry {
   author: string;
   visual_style: string | null;
   scene_count: number;
+  like_count: number;
 }
 
 /**
@@ -51,7 +52,7 @@ export async function loadGallery({
   // Fetch a thumbnail per project (latest complete still) + scene count
   // in two cheap parallel queries rather than N + 1.
   const projectIds = rows.map((p) => p.id);
-  const [thumbsR, countsR] = await Promise.all([
+  const [thumbsR, countsR, likesR] = await Promise.all([
     admin
       .from("clips")
       .select("project_id, still_image_url, video_url, status, still_status, order_index, created_at")
@@ -62,7 +63,18 @@ export async function loadGallery({
       .select("project_id, id")
       .in("project_id", projectIds)
       .eq("status", "complete"),
+    admin
+      .from("gallery_likes")
+      .select("project_id")
+      .in("project_id", projectIds),
   ]);
+
+  const likeCountByProject: Record<string, number> = {};
+  for (const l of likesR.data ?? []) {
+    if (!l.project_id) continue;
+    likeCountByProject[l.project_id] =
+      (likeCountByProject[l.project_id] ?? 0) + 1;
+  }
 
   const thumbByProject: Record<string, { still: string | null; video: string | null }> =
     {};
@@ -107,6 +119,7 @@ export async function loadGallery({
           : "anonymous director",
         visual_style: bible.visual_style ?? null,
         scene_count: countByProject[p.id] ?? 0,
+        like_count: likeCountByProject[p.id] ?? 0,
       };
     });
 }

@@ -13,6 +13,7 @@ import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 import { ReferenceStrip } from "./edit/reference-strip";
 import { ShareButton } from "@/app/components/share-button";
 import { DraftModeToggle } from "@/app/components/draft-mode-toggle";
+import { KeepRolling } from "@/app/components/keep-rolling";
 
 /**
  * Orchestrates the project workspace: chat, timeline, clip detail.
@@ -248,6 +249,7 @@ export function Workspace({
       {/* Chat comes FIRST — it's the driver for everything else. Stills,
           timeline, and the sheets all read as derivatives of whatever
           Dio just drafted. */}
+      <KeepRolling clips={clips} />
       <section id="chat" className="mb-8 scroll-mt-20">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-display text-base uppercase tracking-widest text-ink">

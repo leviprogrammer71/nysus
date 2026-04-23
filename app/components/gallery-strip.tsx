@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { GalleryEntry } from "@/lib/gallery";
+import { LikeButton } from "./like-button";
 
 /**
  * Horizontal strip of publicly shared projects, shown on the landing
@@ -71,6 +72,14 @@ export function GalleryStrip({
                 </p>
               </div>
             </Link>
+            <div className="absolute right-1 top-1">
+              <LikeButton
+                shareToken={e.share_token}
+                initialCount={e.like_count ?? 0}
+                compact
+                onClick={(ev) => ev.stopPropagation()}
+              />
+            </div>
           </li>
         ))}
       </ul>

@@ -332,6 +332,99 @@ type PushSubscriptionsTable = {
   Relationships: [];
 };
 
+type UserProgressTable = {
+  Row: {
+    user_id: string;
+    xp: number;
+    level: number;
+    streak_days: number;
+    last_ship_date: string | null;
+    total_scenes: number;
+    total_stitches: number;
+    total_shares: number;
+    total_remixes_received: number;
+    used_seedance: boolean;
+    used_kling: boolean;
+    updated_at: string;
+  };
+  Insert: {
+    user_id: string;
+    xp?: number;
+    level?: number;
+    streak_days?: number;
+    last_ship_date?: string | null;
+    total_scenes?: number;
+    total_stitches?: number;
+    total_shares?: number;
+    total_remixes_received?: number;
+    used_seedance?: boolean;
+    used_kling?: boolean;
+    updated_at?: string;
+  };
+  Update: {
+    user_id?: string;
+    xp?: number;
+    level?: number;
+    streak_days?: number;
+    last_ship_date?: string | null;
+    total_scenes?: number;
+    total_stitches?: number;
+    total_shares?: number;
+    total_remixes_received?: number;
+    used_seedance?: boolean;
+    used_kling?: boolean;
+    updated_at?: string;
+  };
+  Relationships: [];
+};
+
+type UserAchievementsTable = {
+  Row: {
+    id: string;
+    user_id: string;
+    slug: string;
+    awarded_at: string;
+    metadata: Record<string, unknown>;
+  };
+  Insert: {
+    id?: string;
+    user_id: string;
+    slug: string;
+    awarded_at?: string;
+    metadata?: Record<string, unknown>;
+  };
+  Update: {
+    id?: string;
+    user_id?: string;
+    slug?: string;
+    awarded_at?: string;
+    metadata?: Record<string, unknown>;
+  };
+  Relationships: [];
+};
+
+type GalleryLikesTable = {
+  Row: {
+    id: string;
+    project_id: string;
+    user_id: string;
+    created_at: string;
+  };
+  Insert: {
+    id?: string;
+    project_id: string;
+    user_id: string;
+    created_at?: string;
+  };
+  Update: {
+    id?: string;
+    project_id?: string;
+    user_id?: string;
+    created_at?: string;
+  };
+  Relationships: [];
+};
+
 export interface Database {
   // Discriminator consumed by @supabase/supabase-js to infer PostgREST version.
   __InternalSupabase: {
@@ -345,6 +438,9 @@ export interface Database {
       usage: UsageTable;
       user_budget_overrides: UserBudgetOverridesTable;
       push_subscriptions: PushSubscriptionsTable;
+      user_progress: UserProgressTable;
+      user_achievements: UserAchievementsTable;
+      gallery_likes: GalleryLikesTable;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

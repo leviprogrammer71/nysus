@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { mirrorPredictionToClip } from "@/lib/clips";
 import { sendPushToUser } from "@/lib/push";
+import { awardEvent } from "@/lib/progress";
 import type { Prediction } from "@/lib/replicate";
 
 export const runtime = "nodejs";
@@ -64,9 +65,8 @@ export async function POST(request: NextRequest) {
       prediction: payload,
     });
 
-    // Fire a push if the clip just finished. We look up the project
-    // owner to route the notification. Best-effort — don't block the
-    // webhook response on it.
+    // Fire a push + award XP if the clip just finished. Project owner
+    // look-up pulls the user once; both flows run best-effort.
     if (result.kind === "complete" || result.kind === "failed") {
       const { data: proj } = await admin
         .from("projects")
@@ -85,6 +85,30 @@ export async function POST(request: NextRequest) {
           url: `/projects/${clip.project_id}`,
           tag: `clip-${clip.id}`,
         });
+
+        if (result.kind === "complete") {
+          // Peek at the clip's metadata to credit the right model for
+          // the "Range" achievement.
+          const { data: clipMeta } = await admin
+            .from("clips")
+            .select("shot_metadata")
+            .eq("id", clip.id)
+            .maybeSingle();
+          const animationModel =
+            (clipMeta?.shot_metadata?.animation_model as
+              | "seedance"
+              | "kling"
+              | undefined) ?? "seedance";
+          void awardEvent({
+            admin,
+            userId: proj.user_id,
+            kind: "video_complete",
+            meta: {
+              animation_model: animationModel,
+              project_id: clip.project_id,
+            },
+          });
+        }
       }
     }
 

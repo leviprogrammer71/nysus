@@ -18,6 +18,7 @@ import {
   ESTIMATE_CENTS_PER_GENERATION,
   recordUsage,
 } from "@/lib/budget";
+import { awardEvent } from "@/lib/progress";
 import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -228,6 +229,13 @@ export async function POST(request: NextRequest) {
       model: modelSlug,
       prediction_id: predictionId,
     },
+  });
+
+  void awardEvent({
+    admin,
+    userId: user.id,
+    kind: "character_portrait",
+    meta: { project_id: project.id },
   });
 
   return NextResponse.json({

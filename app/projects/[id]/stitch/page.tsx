@@ -20,7 +20,7 @@ export default async function StitchPage({ params }: PageProps) {
   const { data: clipsRaw } = await supabase
     .from("clips")
     .select(
-      "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, created_at",
+      "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration, narration_audio_url, created_at",
     )
     .eq("project_id", project.id)
     .order("order_index", { ascending: true });
@@ -47,7 +47,11 @@ export default async function StitchPage({ params }: PageProps) {
 
       <div className="rule-ink mb-8" />
 
-      <StitchView clips={clips} projectTitle={project.title} />
+      <StitchView
+        clips={clips}
+        projectId={project.id}
+        projectTitle={project.title}
+      />
     </main>
   );
 }

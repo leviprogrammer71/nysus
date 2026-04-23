@@ -4,6 +4,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated } from "@/lib/auth";
 import { synthesizeNarration, hasTTS } from "@/lib/tts";
 import { recordUsage } from "@/lib/budget";
+import { awardEvent } from "@/lib/progress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -132,6 +133,12 @@ export async function POST(request: NextRequest, { params }: Params) {
         tts_model: narration.model,
         tts_provider: narration.provider,
       },
+    });
+    void awardEvent({
+      admin,
+      userId: user.id,
+      kind: "narration_added",
+      meta: { project_id: clip.project_id },
     });
 
     return NextResponse.json({

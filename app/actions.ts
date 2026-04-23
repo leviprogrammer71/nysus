@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { projectInputSchema } from "@/lib/projects";
+import { templateBySlug } from "@/lib/templates";
 
 type ActionState = { ok: boolean; message: string };
 
@@ -30,12 +31,18 @@ export async function createProject(
     return { ok: false, message: "Not signed in." };
   }
 
+  const templateSlug = formData.get("template");
+  const template =
+    typeof templateSlug === "string" ? templateBySlug(templateSlug) : null;
+
   const { data, error } = await supabase
     .from("projects")
     .insert({
       user_id: user.id,
       title: parsed.data.title,
       description: parsed.data.description,
+      character_sheet: template?.character_sheet ?? {},
+      aesthetic_bible: template?.aesthetic_bible ?? {},
     })
     .select("id")
     .single();

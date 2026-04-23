@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { Logomark } from "@/app/components/logomark";
+import { RemixButton } from "@/app/components/remix-button";
+import { LikeButton } from "@/app/components/like-button";
 import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -62,6 +65,16 @@ export default async function SharePage({ params }: PageProps) {
           {project.title}
         </h1>
         <p className="mt-2 font-hand text-lg text-ink-soft">{tagline}</p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <RemixButton shareToken={token} label="Remix this" />
+          <LikeButton shareToken={token} />
+          <Link
+            href="/gallery"
+            className="inline-flex h-10 items-center font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink"
+          >
+            More in the gallery →
+          </Link>
+        </div>
       </section>
 
       {(clips ?? []).length === 0 ? (

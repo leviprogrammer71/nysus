@@ -19,6 +19,7 @@ import {
   ESTIMATE_CENTS_PER_GENERATION,
   recordUsage,
 } from "@/lib/budget";
+import { awardEvent } from "@/lib/progress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -285,6 +286,14 @@ export async function POST(request: NextRequest) {
         image_provider: provider,
         draft,
       },
+    });
+
+    // XP + achievement hook — best-effort.
+    void awardEvent({
+      admin,
+      userId: user.id,
+      kind: "still_generated",
+      meta: { project_id: project.id },
     });
 
     return NextResponse.json({
