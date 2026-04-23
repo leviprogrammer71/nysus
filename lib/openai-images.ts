@@ -1,24 +1,34 @@
 import { env } from "@/lib/env";
 
 /**
- * OpenAI image generation (gpt-image-1).
+ * OpenAI image generation.
  *
- * Preferred over Replicate Flux when OPENAI_API_KEY is set. Returns
- * a Blob ready to upload straight to Supabase Storage, matching the
- * stills endpoint's contract with Flux.
+ * Defaults to gpt-image-2 (successor to gpt-image-1). Preferred over
+ * Replicate Flux when OPENAI_API_KEY is set. Returns a Blob ready to
+ * upload straight to Supabase Storage, matching the stills endpoint's
+ * contract with Flux.
  *
- * gpt-image-1 pricing (Oct 2024):
- *   low quality     ~$0.01–0.02 / image
- *   medium quality  ~$0.04 / image (default)
- *   high quality    ~$0.17 / image
+ * Model family the API accepts:
+ *   gpt-image-2  (default)     — newer + better prompt adherence
+ *   gpt-image-1  (legacy)      — fall back via OPENAI_IMAGE_MODEL env
+ *   dall-e-3 / dall-e-2        — older; not recommended
+ *
+ * Both gpt-image-1 and gpt-image-2 share the same /v1/images/generations
+ * shape (model, prompt, size, quality, n). If the payload diverges in a
+ * future release, override OPENAI_IMAGE_MODEL back to gpt-image-1 while
+ * we adjust.
  */
 
 export const OPENAI_IMAGE_MODEL =
-  process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
+  process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2";
 export const OPENAI_IMAGE_QUALITY =
   (process.env.OPENAI_IMAGE_QUALITY ?? "medium") as "low" | "medium" | "high";
 
-/** gpt-image-1 only accepts these sizes. Maps from shot aspect_ratio. */
+/**
+ * Portrait / landscape / square buckets. gpt-image-1/2 accept the
+ * same three sizes — we map shot aspect_ratio to whichever bucket
+ * gets closest, then FFmpeg downstream can crop if needed.
+ */
 function openAiSize(aspect: string): "1024x1024" | "1024x1536" | "1536x1024" {
   if (aspect === "9:16" || aspect === "3:4") return "1024x1536";
   if (aspect === "16:9" || aspect === "4:3" || aspect === "21:9")

@@ -182,61 +182,68 @@ export function Workspace({
     [clips, openClipId],
   );
 
+  const inFlightCount = clips.filter(
+    (c) => c.status === "queued" || c.status === "processing",
+  ).length;
+
   return (
-    <main className="min-h-screen flex flex-col px-4 sm:px-6 py-8 max-w-3xl mx-auto w-full">
-      <header className="flex items-center justify-between mb-6 gap-2">
-        <Link
-          href="/"
-          className="-ml-2 px-2 py-2 font-hand text-lg text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
+    <main className="min-h-screen flex flex-col px-4 sm:px-6 py-6 max-w-4xl mx-auto w-full">
+      {/* Breadcrumb + toolbar — workstation style. Tabs live in the
+          primary nav (BottomNav on mobile, Dashboard link in corner). */}
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 pb-3">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex items-center gap-1.5 font-body text-[11px] uppercase tracking-widest text-ink-soft/70 min-w-0"
         >
-          &larr; projects
-        </Link>
-        <div className="flex items-center gap-1 sm:gap-3">
+          <Link href="/dashboard" className="hover:text-ink">
+            Projects
+          </Link>
+          <span aria-hidden>/</span>
+          <span className="truncate text-ink">{projectTitle}</span>
+        </nav>
+        <div className="flex items-center gap-1.5">
           <Link
             href={`/projects/${projectId}/edit`}
-            className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
+            className="inline-flex h-9 items-center rounded-full border border-ink/20 bg-paper px-3 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-ink/5"
           >
-            edit
+            Edit
           </Link>
           <Link
             href={`/projects/${projectId}/storyboard`}
-            className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
+            className="inline-flex h-9 items-center rounded-full border border-ink/20 bg-paper px-3 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-ink/5"
           >
-            storyboard
+            Storyboard
           </Link>
           <Link
             href={`/projects/${projectId}/stitch`}
-            className="px-2 py-2 font-hand text-base text-sepia-deep hover:text-ink transition-colors inline-flex items-center min-h-11"
+            className="inline-flex h-9 items-center rounded-full bg-ink px-3 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft"
           >
-            stitch &rarr;
+            Stitch →
           </Link>
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              aria-label="Sign out"
-              className="px-2 py-2 min-h-11 font-body text-[11px] uppercase tracking-widest text-ink-soft/70 hover:text-ink transition-colors"
-            >
-              sign out
-            </button>
-          </form>
         </div>
       </header>
 
-      <h1 className="font-display text-4xl sm:text-5xl text-ink leading-tight mb-1">
-        {projectTitle}
-      </h1>
-      {projectDescription ? (
-        <p className="font-body text-ink-soft leading-relaxed max-w-xl">
-          {projectDescription}
-        </p>
-      ) : null}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <ShareButton projectId={projectId} />
-        <DraftModeToggle projectId={projectId} />
-      </div>
-
-      <div className="rule-ink mt-6 mb-6" />
+      {/* Title row with status pill + share + draft toggle */}
+      <section className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-display text-3xl sm:text-4xl text-ink leading-tight">
+            {projectTitle}
+          </h1>
+          {projectDescription ? (
+            <p className="mt-1 font-body text-sm text-ink-soft/80 leading-relaxed max-w-xl">
+              {projectDescription}
+            </p>
+          ) : null}
+          <p className="mt-2 font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
+            {clips.length} {clips.length === 1 ? "scene" : "scenes"}
+            {inFlightCount > 0 ? ` · ${inFlightCount} rendering` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ShareButton projectId={projectId} />
+          <DraftModeToggle projectId={projectId} />
+        </div>
+      </section>
 
       <StillsPanel clips={clips} onOpen={setOpenClipId} />
 

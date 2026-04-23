@@ -11,13 +11,19 @@ import { isSupabaseConfigured } from "@/lib/env";
  *   /auth/**  OAuth / signout redirects
  *   /api/health  health probe
  */
-const PUBLIC_EXACT = new Set<string>(["/", "/login", "/setup"]);
+const PUBLIC_EXACT = new Set<string>([
+  "/",
+  "/login",
+  "/setup",
+  "/gallery",
+]);
 const PUBLIC_PREFIXES = [
   "/auth/",
   "/login/",
   "/setup/",
   "/api/health",
   "/share/",
+  "/gallery/",
   "/sw.js",
 ];
 
