@@ -54,15 +54,34 @@ async function rpc<T>(
   path: string,
   init: RequestInit & { method: "GET" | "POST" | "DELETE" },
 ): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${env.REPLICATE_API_TOKEN}`,
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${env.REPLICATE_API_TOKEN}`,
+        "Content-Type": "application/json",
+        ...init.headers,
+      },
+      cache: "no-store",
+    });
+  } catch (err) {
+    // Unwrap undici's "fetch failed" wrapper so callers see the
+    // underlying DNS / connection / TLS failure instead of a useless
+    // generic message.
+    const cause = err instanceof Error
+      ? ((err as { cause?: unknown }).cause as Error | undefined)
+      : undefined;
+    const code = cause ? (cause as { code?: string }).code : undefined;
+    const detail = cause
+      ? `${code ? `${code} · ` : ""}${cause.message}`
+      : err instanceof Error
+      ? err.message
+      : String(err);
+    throw new Error(
+      `Replicate ${init.method} ${path} — network error: ${detail}`,
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(
@@ -72,6 +91,20 @@ async function rpc<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * Parse a model string into (model, version?). Replicate slugs come
+ * in two forms:
+ *   - "owner/name"                 → latest version (POST /models/...)
+ *   - "owner/name:<versionSha>"    → pinned version (POST /predictions)
+ */
+function parseModelSlug(slug: string): { model: string; version?: string } {
+  const [modelPart, versionPart] = slug.split(":");
+  if (versionPart && versionPart.length >= 8) {
+    return { model: modelPart, version: versionPart };
+  }
+  return { model: slug };
+}
+
 export async function createPrediction<Input>({
   model,
   version,
@@ -79,23 +112,79 @@ export async function createPrediction<Input>({
   webhook,
   webhook_events_filter,
 }: CreatePredictionArgs<Input>): Promise<Prediction<Input>> {
-  const body: Record<string, unknown> = { input };
-  if (version) body.version = version;
-  // When using `model`, POST to /models/{owner}/{name}/predictions instead.
   if (!version && !model) {
     throw new Error("createPrediction: supply `model` or `version`.");
   }
+
+  // When `model` carries a `:version` suffix, switch to the /predictions
+  // endpoint with an explicit version — the /models/owner/name/predictions
+  // endpoint can't take a version SHA in the URL.
+  let resolvedVersion = version;
+  let resolvedModel = model;
+  if (!resolvedVersion && model && model.includes(":")) {
+    const parsed = parseModelSlug(model);
+    resolvedVersion = parsed.version;
+    resolvedModel = parsed.model;
+  }
+
+  const body: Record<string, unknown> = { input };
+  if (resolvedVersion) body.version = resolvedVersion;
   if (webhook) body.webhook = webhook;
   if (webhook_events_filter) body.webhook_events_filter = webhook_events_filter;
 
-  const path = model
-    ? `/models/${model}/predictions`
-    : `/predictions`;
+  const path =
+    resolvedVersion
+      ? `/predictions`
+      : `/models/${resolvedModel}/predictions`;
 
   return rpc<Prediction<Input>>(path, {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Probe Replicate authentication without creating a prediction. Used
+ * by /api/health/replicate to verify REPLICATE_API_TOKEN + network
+ * reachability before burning a generation credit.
+ */
+export async function replicateWhoami(): Promise<{
+  ok: boolean;
+  detail: string;
+}> {
+  try {
+    const res = await fetch(`${API}/account`, {
+      headers: { Authorization: `Bearer ${env.REPLICATE_API_TOKEN}` },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        ok: false,
+        detail: `HTTP ${res.status}: ${body.slice(0, 300)}`,
+      };
+    }
+    const body = (await res.json()) as {
+      username?: string;
+      name?: string;
+      github_url?: string;
+      type?: string;
+    };
+    return {
+      ok: true,
+      detail: `authenticated as ${body.username ?? body.name ?? "(unknown)"}`,
+    };
+  } catch (err) {
+    const cause = err instanceof Error
+      ? ((err as { cause?: unknown }).cause as Error | undefined)
+      : undefined;
+    const detail = cause
+      ? `${(cause as { code?: string }).code ?? ""} ${cause.message ?? ""}`.trim()
+      : err instanceof Error
+      ? err.message
+      : String(err);
+    return { ok: false, detail };
+  }
 }
 
 export async function getPrediction<Input, Output>(

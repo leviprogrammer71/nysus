@@ -3,29 +3,57 @@ import { createPrediction, fetchReplicateOutputAsBlob, getPrediction } from "@/l
 /**
  * Image generation via Replicate (openai/gpt-image-2).
  *
- * We route the image call through Replicate — not the OpenAI direct
- * API — because Replicate hosts `openai/gpt-image-2` with a stable
- * surface, billing, and regional access that "just works" once
- * REPLICATE_API_TOKEN is set. No Flux, no fallback chain.
+ * We route through Replicate — not the OpenAI direct API — because
+ * Replicate hosts `openai/gpt-image-2` with a stable surface, billing,
+ * and regional access that "just works" once REPLICATE_API_TOKEN is set.
  *
- * Model override: OPENAI_IMAGE_MODEL env (e.g. "openai/gpt-image-1" to
- * pin to the older model). Default is the current one.
+ * The input shape here matches Replicate's schema for this model, NOT
+ * OpenAI's native /v1/images/generations shape. Specifically:
+ *   - aspect_ratio  (e.g. "9:16"), not `size` (e.g. "1024x1536")
+ *   - number_of_images, not `n`
+ *   - quality:  "auto" | "low" | "medium" | "high"
+ *   - output_format: "png" | "jpg" | "webp"
+ *
+ * Model override: OPENAI_IMAGE_MODEL. Default is the pinned version
+ * slug from `npx create-replicate --model=openai/gpt-image-2` so we
+ * don't drift if Replicate rolls a new head.
  */
 
+// Pinned version hash from `npx create-replicate --model=openai/gpt-image-2`
+// Override with OPENAI_IMAGE_MODEL env (e.g. "openai/gpt-image-2" to
+// follow the latest version, or a different pinned SHA).
 export const OPENAI_IMAGE_MODEL =
-  process.env.OPENAI_IMAGE_MODEL ?? "openai/gpt-image-2";
+  process.env.OPENAI_IMAGE_MODEL ??
+  "openai/gpt-image-2:875d2396848b8447d556115adaa81d4d0508d03a0b61c9d51da0d069efd00c35";
+
 export const OPENAI_IMAGE_QUALITY =
-  (process.env.OPENAI_IMAGE_QUALITY ?? "high") as "low" | "medium" | "high";
+  (process.env.OPENAI_IMAGE_QUALITY ?? "high") as
+    | "auto"
+    | "low"
+    | "medium"
+    | "high";
 
 /**
- * Map shot aspect_ratio → the gpt-image-2 native size bucket.
- * openai/gpt-image-2 accepts { 1024x1024, 1024x1536, 1536x1024 }.
+ * Normalize the app's aspect_ratio values to ones gpt-image-2 accepts.
+ * The model accepts free-form ratios; we pass through common ones and
+ * map the less common app values to their nearest native bucket.
  */
-function gptImageSize(aspect: string): "1024x1024" | "1024x1536" | "1536x1024" {
-  if (aspect === "9:16" || aspect === "3:4") return "1024x1536";
-  if (aspect === "16:9" || aspect === "4:3" || aspect === "21:9")
-    return "1536x1024";
-  return "1024x1024";
+function gptImageAspect(aspect: string): string {
+  // gpt-image-2 accepts: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 4:5, 5:4, 21:9.
+  // Our app uses 9:16, 16:9, 1:1, 4:3, 3:4, 21:9. All pass through.
+  const supported = new Set([
+    "1:1",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:3",
+    "9:16",
+    "16:9",
+    "4:5",
+    "5:4",
+    "21:9",
+  ]);
+  return supported.has(aspect) ? aspect : "9:16";
 }
 
 export function hasOpenAIImageKey(): boolean {
@@ -42,11 +70,6 @@ export interface GeneratedImage {
   model: string;
 }
 
-/**
- * Unwrap undici's "fetch failed" so the caller sees the real network
- * error cause, and collapse a few common Replicate failure shapes
- * into a single string.
- */
 function describeFetchError(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
   const cause = (err as { cause?: unknown }).cause;
@@ -59,7 +82,8 @@ function describeFetchError(err: unknown): string {
 
 /**
  * Generate a still. Single path: create a Replicate prediction on
- * openai/gpt-image-2, poll, download the produced image.
+ * openai/gpt-image-2 with the model's native input shape, poll,
+ * download the produced image.
  */
 export async function generateOpenAIImage({
   prompt,
@@ -72,8 +96,7 @@ export async function generateOpenAIImage({
   signal?: AbortSignal;
   draft?: boolean;
 }): Promise<GeneratedImage> {
-  const size = draft ? ("1024x1024" as const) : gptImageSize(aspect_ratio);
-  const [w, h] = size.split("x").map(Number);
+  const ratio = draft ? "1:1" : gptImageAspect(aspect_ratio);
   const quality = draft ? "low" : OPENAI_IMAGE_QUALITY;
 
   let prediction;
@@ -82,22 +105,24 @@ export async function generateOpenAIImage({
       model: OPENAI_IMAGE_MODEL,
       input: {
         prompt,
-        // gpt-image-2 on Replicate accepts the native OpenAI shape.
-        // Keep the payload minimal + future-proof — unknown fields are
-        // rejected by strict schemas but OpenAI's endpoint ignores
-        // them.
-        size,
+        aspect_ratio: ratio,
         quality,
+        background: "auto",
+        moderation: "auto",
         output_format: "png",
-        n: 1,
+        number_of_images: 1,
+        output_compression: 90,
       },
     });
   } catch (err) {
-    throw new Error(`gpt-image-2 create prediction — ${describeFetchError(err)}`);
+    throw new Error(
+      `gpt-image-2 create prediction — ${describeFetchError(err)}`,
+    );
   }
 
-  // Poll up to 60s. gpt-image-2 on "high" typically settles in 15-25s.
-  const deadline = Date.now() + 60_000;
+  // Poll up to 90s. gpt-image-2 on "high" typically settles in 15-30s
+  // but a cold GPU can push past a minute.
+  const deadline = Date.now() + 90_000;
   let final = prediction;
   while (
     (final.status === "starting" || final.status === "processing") &&
@@ -131,11 +156,15 @@ export async function generateOpenAIImage({
   }
 
   const { blob, contentType } = await fetchReplicateOutputAsBlob(outputUrl);
-  return {
-    blob,
-    contentType,
-    width: w,
-    height: h,
-    model: OPENAI_IMAGE_MODEL,
-  };
+
+  // Rough width/height based on the requested ratio at 1024 long-edge.
+  const { width, height } = aspectToWH(ratio);
+  return { blob, contentType, width, height, model: OPENAI_IMAGE_MODEL };
+}
+
+function aspectToWH(r: string): { width: number; height: number } {
+  const [a, b] = r.split(":").map(Number);
+  if (!a || !b) return { width: 1024, height: 1024 };
+  if (a >= b) return { width: 1536, height: Math.round((1536 * b) / a) };
+  return { width: Math.round((1536 * a) / b), height: 1536 };
 }
