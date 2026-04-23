@@ -172,29 +172,59 @@ export async function POST(request: NextRequest) {
     .update({ still_status: "processing", still_prompt: imagePrompt })
     .eq("id", clipId);
 
-  // --- Generate via OpenAI or Flux ------------------------------------
-  const useOpenAI = hasOpenAIImageKey();
-  const provider: "openai" | "flux" = useOpenAI ? "openai" : "flux";
-  const modelSlug = useOpenAI
+  // --- Generate via OpenAI (with Flux fallback) -----------------------
+  // Strategy:
+  //   1. If OPENAI_API_KEY present, try gpt-image-2 → gpt-image-1 chain.
+  //   2. If that chain fails for any reason (network, gated model,
+  //      content policy) AND REPLICATE_API_TOKEN is also set, fall
+  //      through to Flux so the user isn't stuck.
+  //   3. If OPENAI_API_KEY isn't present at all, go straight to Flux.
+  const hasOpenAI = hasOpenAIImageKey();
+  const hasReplicate = Boolean(
+    (process.env.REPLICATE_API_TOKEN ?? "").trim(),
+  );
+
+  let provider: "openai" | "flux" = hasOpenAI ? "openai" : "flux";
+  let modelSlug = hasOpenAI
     ? OPENAI_IMAGE_MODEL
     : draft
     ? FLUX_DRAFT_MODEL
     : FLUX_MODEL;
+  let openaiError: string | null = null;
 
   try {
-    let imageBlob: Blob;
-    let imageContentType: string;
+    let imageBlob: Blob | null = null;
+    let imageContentType: string | null = null;
     let predictionId: string | null = null;
 
-    if (useOpenAI) {
-      const img = await generateOpenAIImage({
-        prompt: imagePrompt,
-        aspect_ratio: aspectRatio,
-        draft,
-      });
-      imageBlob = img.blob;
-      imageContentType = img.contentType;
-    } else {
+    if (hasOpenAI) {
+      try {
+        const img = await generateOpenAIImage({
+          prompt: imagePrompt,
+          aspect_ratio: aspectRatio,
+          draft,
+        });
+        imageBlob = img.blob;
+        imageContentType = img.contentType;
+        // Record the model that ACTUALLY produced the image — may be
+        // the fallback one.
+        modelSlug = img.model;
+        provider = "openai";
+      } catch (err) {
+        openaiError = err instanceof Error ? err.message : String(err);
+        if (!hasReplicate) throw err;
+        console.warn(
+          "OpenAI image generation failed, falling back to Flux:",
+          openaiError,
+        );
+        provider = "flux";
+        modelSlug = draft ? FLUX_DRAFT_MODEL : FLUX_MODEL;
+      }
+    }
+
+    // Flux path runs when we started there (no OpenAI) OR we fell back
+    // from an OpenAI failure above.
+    if (!imageBlob) {
       const inputValidated = fluxInputSchema.parse({
         prompt: imagePrompt,
         aspect_ratio: aspectRatio,
@@ -233,6 +263,10 @@ export async function POST(request: NextRequest) {
       const fetched = await fetchReplicateOutputAsBlob(outputUrl);
       imageBlob = fetched.blob;
       imageContentType = fetched.contentType;
+    }
+
+    if (!imageBlob || !imageContentType) {
+      throw new Error("Still generation produced no output.");
     }
 
     // --- Mirror to Storage ----------------------------------------------
@@ -285,6 +319,9 @@ export async function POST(request: NextRequest) {
         kind: "still",
         image_provider: provider,
         draft,
+        // Surface the original OpenAI failure when we fell back so
+        // usage logs explain why Flux was charged instead.
+        ...(openaiError ? { fallback_from: openaiError } : {}),
       },
     });
 
@@ -303,9 +340,23 @@ export async function POST(request: NextRequest) {
       prediction_id: predictionId,
       provider,
       model: modelSlug,
+      ...(openaiError ? { fell_back_from: openaiError } : {}),
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error
+      ? ((err as { cause?: unknown }).cause as Error | undefined)
+      : undefined;
+    // Unwrap undici "fetch failed" wrappers so the actual cause surfaces.
+    const causeMsg = cause
+      ? `${(cause as { code?: string }).code ?? ""} ${cause.message ?? ""}`.trim()
+      : "";
+    const msg = causeMsg && rawMsg === "fetch failed"
+      ? `Upstream unreachable — ${causeMsg}`
+      : causeMsg
+      ? `${rawMsg} (${causeMsg})`
+      : rawMsg;
+
     await admin
       .from("clips")
       .update({ still_status: "failed", error_message: msg })

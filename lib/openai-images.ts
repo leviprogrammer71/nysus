@@ -8,27 +8,21 @@ import { env } from "@/lib/env";
  * upload straight to Supabase Storage, matching the stills endpoint's
  * contract with Flux.
  *
- * Model family the API accepts:
- *   gpt-image-2  (default)     — newer + better prompt adherence
- *   gpt-image-1  (legacy)      — fall back via OPENAI_IMAGE_MODEL env
- *   dall-e-3 / dall-e-2        — older; not recommended
+ * If gpt-image-2 is not available on the caller's OpenAI org (returns
+ * model_not_found / invalid_request_error), we transparently retry
+ * with gpt-image-1 so the user isn't stuck behind a rollout gate.
  *
- * Both gpt-image-1 and gpt-image-2 share the same /v1/images/generations
- * shape (model, prompt, size, quality, n). If the payload diverges in a
- * future release, override OPENAI_IMAGE_MODEL back to gpt-image-1 while
- * we adjust.
+ * Fallback model override: OPENAI_IMAGE_FALLBACK_MODEL (defaults to
+ * gpt-image-1). Primary override: OPENAI_IMAGE_MODEL.
  */
 
 export const OPENAI_IMAGE_MODEL =
   process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2";
+export const OPENAI_IMAGE_FALLBACK_MODEL =
+  process.env.OPENAI_IMAGE_FALLBACK_MODEL ?? "gpt-image-1";
 export const OPENAI_IMAGE_QUALITY =
   (process.env.OPENAI_IMAGE_QUALITY ?? "medium") as "low" | "medium" | "high";
 
-/**
- * Portrait / landscape / square buckets. gpt-image-1/2 accept the
- * same three sizes — we map shot aspect_ratio to whichever bucket
- * gets closest, then FFmpeg downstream can crop if needed.
- */
 function openAiSize(aspect: string): "1024x1024" | "1024x1536" | "1536x1024" {
   if (aspect === "9:16" || aspect === "3:4") return "1024x1536";
   if (aspect === "16:9" || aspect === "4:3" || aspect === "21:9")
@@ -49,11 +43,118 @@ export interface GeneratedImage {
   contentType: string;
   width: number;
   height: number;
+  /** Model that actually produced the image (post-fallback). */
+  model: string;
 }
 
 /**
- * Generate a still with gpt-image-1. Returns a PNG Blob.
- * Throws on API error; caller should fall back to Flux if desired.
+ * Unwrap undici's "fetch failed" wrapper so the user sees the actual
+ * network error instead of a useless one-liner. Works on both Node 20+
+ * (Error.cause) and older transports.
+ */
+function describeFetchError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    const code = (cause as { code?: string }).code;
+    return `${err.message}: ${code ? `${code} · ` : ""}${cause.message}`;
+  }
+  return err.message;
+}
+
+async function callOpenAIImages({
+  model,
+  prompt,
+  size,
+  quality,
+  signal,
+}: {
+  model: string;
+  prompt: string;
+  size: "1024x1024" | "1024x1536" | "1536x1024";
+  quality: "low" | "medium" | "high";
+  signal?: AbortSignal;
+}): Promise<{ bytes: Uint8Array; model: string }> {
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model, prompt, size, quality, n: 1 }),
+      signal,
+    });
+  } catch (err) {
+    throw new Error(`OpenAI image network error — ${describeFetchError(err)}`);
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    // Body has a JSON `error.code` we can inspect for the fallback
+    // decision. Don't explode on unparseable text.
+    let code: string | null = null;
+    try {
+      const body = JSON.parse(text) as {
+        error?: { code?: string; type?: string; message?: string };
+      };
+      code = body.error?.code ?? body.error?.type ?? null;
+    } catch {
+      /* keep raw text */
+    }
+    const err = new Error(
+      `OpenAI image ${response.status} (${code ?? "unknown"}): ${text.slice(
+        0,
+        400,
+      )}`,
+    );
+    (err as { code?: string }).code = code ?? undefined;
+    (err as { status?: number }).status = response.status;
+    throw err;
+  }
+
+  const payload = (await response.json()) as {
+    data?: Array<{ b64_json?: string; url?: string }>;
+  };
+  const entry = payload.data?.[0];
+  if (!entry) throw new Error("OpenAI returned no image data.");
+
+  if (entry.b64_json) {
+    return {
+      bytes: Uint8Array.from(atob(entry.b64_json), (c) => c.charCodeAt(0)),
+      model,
+    };
+  }
+  if (entry.url) {
+    const imgRes = await fetch(entry.url);
+    if (!imgRes.ok) throw new Error(`Fetch image: ${imgRes.status}`);
+    return { bytes: new Uint8Array(await imgRes.arrayBuffer()), model };
+  }
+  throw new Error("OpenAI response missing image payload.");
+}
+
+/**
+ * Is this error one where retrying with the fallback model would help?
+ * Covers: model not found/available, 404s, invalid_model, and the
+ * generic 400 cases OpenAI returns when a model slug is gated.
+ */
+function shouldFallbackModel(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const status = (err as { status?: number }).status;
+  const code = (err as { code?: string }).code ?? "";
+  if (status === 404) return true;
+  if (status === 400 && /model/i.test(err.message)) return true;
+  if (/model_not_found|invalid_request_error|model_not_available/i.test(code))
+    return true;
+  return false;
+}
+
+/**
+ * Generate a still. Tries OPENAI_IMAGE_MODEL first, retries once with
+ * OPENAI_IMAGE_FALLBACK_MODEL on a gated-model error, then returns.
+ * Caller is expected to catch any remaining exception and fall through
+ * to Flux.
  */
 export async function generateOpenAIImage({
   prompt,
@@ -64,58 +165,44 @@ export async function generateOpenAIImage({
   prompt: string;
   aspect_ratio: string;
   signal?: AbortSignal;
-  /** Drop quality to "low" and force 1024x1024 for cheap iteration. */
   draft?: boolean;
 }): Promise<GeneratedImage> {
   const size = draft ? ("1024x1024" as const) : openAiSize(aspect_ratio);
   const [w, h] = size.split("x").map(Number);
+  const quality = draft ? "low" : OPENAI_IMAGE_QUALITY;
 
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  let result: { bytes: Uint8Array; model: string };
+  try {
+    result = await callOpenAIImages({
       model: OPENAI_IMAGE_MODEL,
       prompt,
       size,
-      quality: draft ? "low" : OPENAI_IMAGE_QUALITY,
-      n: 1,
-    }),
-    signal,
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `OpenAI image ${response.status}: ${text.slice(0, 500)}`,
-    );
-  }
-
-  const payload = (await response.json()) as {
-    data?: Array<{ b64_json?: string; url?: string }>;
-  };
-
-  const entry = payload.data?.[0];
-  if (!entry) throw new Error("OpenAI returned no image data.");
-
-  let bytes: Uint8Array;
-  if (entry.b64_json) {
-    bytes = Uint8Array.from(atob(entry.b64_json), (c) => c.charCodeAt(0));
-  } else if (entry.url) {
-    // gpt-image-1 may return URLs depending on the account tier.
-    const imgRes = await fetch(entry.url);
-    if (!imgRes.ok) throw new Error(`Fetch image: ${imgRes.status}`);
-    bytes = new Uint8Array(await imgRes.arrayBuffer());
-  } else {
-    throw new Error("OpenAI response missing image payload.");
+      quality,
+      signal,
+    });
+  } catch (err) {
+    if (
+      OPENAI_IMAGE_FALLBACK_MODEL &&
+      OPENAI_IMAGE_FALLBACK_MODEL !== OPENAI_IMAGE_MODEL &&
+      shouldFallbackModel(err)
+    ) {
+      result = await callOpenAIImages({
+        model: OPENAI_IMAGE_FALLBACK_MODEL,
+        prompt,
+        size,
+        quality,
+        signal,
+      });
+    } else {
+      throw err;
+    }
   }
 
   return {
-    blob: new Blob([bytes.buffer as ArrayBuffer], { type: "image/png" }),
+    blob: new Blob([result.bytes.buffer as ArrayBuffer], { type: "image/png" }),
     contentType: "image/png",
     width: w,
     height: h,
+    model: result.model,
   };
 }
