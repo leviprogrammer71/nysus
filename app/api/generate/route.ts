@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated } from "@/lib/auth";
-import { env } from "@/lib/env";
 import { createPrediction } from "@/lib/replicate";
 import { buildSeedanceInput, SEEDANCE_MODEL } from "@/lib/seedance";
+import { replicateWebhookUrl } from "@/lib/webhooks";
 import { shotPromptSchema } from "@/lib/shot-prompt";
 import { gateGeneration, recordUsage } from "@/lib/budget";
 
@@ -107,9 +107,10 @@ export async function POST(request: NextRequest) {
   }
 
   // --- Kick off Replicate prediction ---------------------------------
-  const webhookUrl =
-    `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/replicate/webhook` +
-    `?clip_id=${clipRow.id}&secret=${encodeURIComponent(env.CRON_SECRET)}`;
+  // Replicate rejects non-HTTPS webhooks with 422. In dev (localhost)
+  // we omit the field and rely on the client-side poll against
+  // /api/clips/[id] to drive the terminal state.
+  const webhookUrl = replicateWebhookUrl(clipRow.id);
 
   const seedanceInput = buildSeedanceInput({
     shot: body.shot,
@@ -120,11 +121,12 @@ export async function POST(request: NextRequest) {
     const prediction = await createPrediction({
       model: SEEDANCE_MODEL,
       input: seedanceInput,
-      // If APP_URL is localhost, Replicate will still accept the URL but
-      // the webhook obviously won't fire. The client-side poll against
-      // /api/clips/[id] covers that dev case.
-      webhook: webhookUrl,
-      webhook_events_filter: ["completed"],
+      ...(webhookUrl
+        ? {
+            webhook: webhookUrl,
+            webhook_events_filter: ["completed" as const],
+          }
+        : {}),
     });
 
     // Service-role update so we don't depend on RLS timing for the

@@ -10,10 +10,20 @@ import type { ShotPrompt } from "@/lib/shot-prompt";
  * than editing this file.
  */
 
+/**
+ * Seedance 2.0 lives at `bytedance/seedance-2.0` on Replicate
+ * (https://replicate.com/bytedance/seedance-2.0). The 1.x slugs are
+ * still alive but 2.0 is the realistic default now.
+ */
 export const SEEDANCE_MODEL =
-  process.env.SEEDANCE_MODEL ?? "bytedance/seedance-1-pro";
+  process.env.SEEDANCE_MODEL ?? "bytedance/seedance-2.0";
 
-/** Cheaper Seedance tier used when the project is in draft mode. */
+/**
+ * Cheaper Seedance tier used when the project is in draft mode.
+ * Seedance 2.0 doesn't ship a dedicated "lite" variant; we fall back
+ * to 1-lite which is the cheapest bytedance video model on Replicate.
+ * Override via SEEDANCE_DRAFT_MODEL when a 2.0-lite goes live.
+ */
 export const SEEDANCE_DRAFT_MODEL =
   process.env.SEEDANCE_DRAFT_MODEL ?? "bytedance/seedance-1-lite";
 

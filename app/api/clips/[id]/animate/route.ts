@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { isAuthenticated } from "@/lib/auth";
-import { env } from "@/lib/env";
 import { createPrediction } from "@/lib/replicate";
+import { replicateWebhookUrl } from "@/lib/webhooks";
 import { buildSeedanceInput, SEEDANCE_MODEL, SEEDANCE_DRAFT_MODEL } from "@/lib/seedance";
 import { buildKlingInput, KLING_MODEL } from "@/lib/kling";
 import { shotPromptSchema } from "@/lib/shot-prompt";
@@ -120,9 +120,9 @@ export async function POST(_req: NextRequest, { params }: Params) {
     }
   }
 
-  const webhookUrl =
-    `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/replicate/webhook` +
-    `?clip_id=${clip.id}&secret=${encodeURIComponent(env.CRON_SECRET)}`;
+  // HTTPS-only — in dev this is null and we rely on the client-side
+  // poll for state changes.
+  const webhookUrl = replicateWebhookUrl(clip.id);
 
   try {
     let prediction;
@@ -133,8 +133,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
       prediction = await createPrediction({
         model: modelSlug,
         input,
-        webhook: webhookUrl,
-        webhook_events_filter: ["completed"],
+        ...(webhookUrl
+          ? {
+              webhook: webhookUrl,
+              webhook_events_filter: ["completed" as const],
+            }
+          : {}),
       });
     } else {
       modelSlug = draft ? SEEDANCE_DRAFT_MODEL : SEEDANCE_MODEL;
@@ -142,8 +146,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
       prediction = await createPrediction({
         model: modelSlug,
         input,
-        webhook: webhookUrl,
-        webhook_events_filter: ["completed"],
+        ...(webhookUrl
+          ? {
+              webhook: webhookUrl,
+              webhook_events_filter: ["completed" as const],
+            }
+          : {}),
       });
     }
 
