@@ -117,9 +117,10 @@ export async function generateOpenAIImage({
         quality,
         background: "auto",
         moderation: "auto",
-        // JPG, never PNG/WebP — Seedance + Kling reject WebP downstream
-        // and both will animate from the still we hand them.
-        output_format: "jpg",
+        // Replicate's gpt-image-2 schema accepts "png" | "jpeg" | "webp".
+        // We use "jpeg" so Seedance + Kling don't reject the still
+        // downstream (they refuse webp).
+        output_format: "jpeg",
         number_of_images: 1,
         output_compression: 90,
       },

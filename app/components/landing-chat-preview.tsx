@@ -37,10 +37,11 @@ export function LandingChatPreview() {
             </span>
           </div>
           <div className="flex-1">
-            <div className="font-hand text-sepia-deep text-base mb-1">Dio</div>
+            <div className="font-hand text-sepia-deep text-base mb-1">Ari</div>
             <p className="font-body text-ink leading-relaxed">
-              I&rsquo;m Dio &mdash; your director. Tell me the story, a
-              sentence is enough.
+              Tell me what you&rsquo;re making. I hold the thread —
+              characters, aesthetic, the shape of the film. Mae handles the
+              build once we have the plan.
             </p>
             <p className="font-hand text-ink-soft mt-2">what are we making?</p>
           </div>
@@ -124,7 +125,7 @@ export function LandingChatPreview() {
           </button>
         </div>
         <p className="font-body text-[10px] uppercase tracking-widest text-ink-soft/50 mt-2">
-          enter to send · sign in to actually talk to Dio
+          enter to send · sign in to actually talk to Ari
         </p>
       </form>
 
@@ -156,10 +157,10 @@ function SignInPrompt({
       : "sign in to attach";
   const body =
     reason === "send"
-      ? "Dio only writes back for signed-in directors. It's free to sign up, no credit card."
+      ? "Ari only writes back for signed-in directors. Free to sign up, no credit card."
       : reason === "mic"
-      ? "Voice goes through Dio's pipeline — signed-in only."
-      : "Attachments get routed to your own project in Supabase. Sign in first.";
+      ? "Voice routes through Ari + Mae — signed-in only."
+      : "Attachments land in your own project. Sign in first.";
 
   return (
     <div

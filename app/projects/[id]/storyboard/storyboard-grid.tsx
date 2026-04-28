@@ -157,7 +157,7 @@ export function StoryboardGrid({
       {clips.length === 0 ? (
         <div className="mt-8 rounded-lg border border-dashed border-ink/20 p-8 text-center">
           <p className="font-body text-sm text-ink-soft/70">
-            No scenes yet. Draft shots with Dio from the project page.
+            No scenes yet. Plan with Ari, then have Mae draft shots — both live on the project page.
           </p>
         </div>
       ) : (

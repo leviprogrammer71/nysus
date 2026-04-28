@@ -340,8 +340,8 @@ function CharacterSheetPanel({
         {characters.length === 0 ? (
           <div className="space-y-3">
             <p className="font-body text-sm text-ink-soft">
-              Not yet populated. Ask Dio to draft a sheet &mdash; or drop a
-              photo below and he&rsquo;ll work from it.
+              Not yet populated. Ask Ari to draft a sheet &mdash; or drop a
+              photo below and she&rsquo;ll work from it.
             </p>
             <ReferenceStrip
               projectId={projectId}
@@ -422,7 +422,7 @@ function AestheticBiblePanel({
         ) : (
           <p className="font-body text-sm text-ink-soft">
             Not yet populated. Drop a still, a screenshot, a painting &mdash;
-            anything you want Dio to treat as the visual source of truth.
+            anything you want Ari + Mae to treat as the visual source of truth.
           </p>
         )}
         <ReferenceStrip

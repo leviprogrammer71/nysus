@@ -98,8 +98,8 @@ export function NewProjectForm() {
 
       <p className="mt-2 font-body text-xs text-ink-soft/60 leading-relaxed">
         Templates pre-fill the character sheet and aesthetic bible.
-        You&rsquo;ll refine both inside the project — Dio adjusts every scene
-        prompt to whatever is in there.
+        You&rsquo;ll refine both inside the project — Ari plans against
+        whatever&rsquo;s in there and Mae builds from the same source of truth.
       </p>
     </form>
   );

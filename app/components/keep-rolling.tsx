@@ -69,7 +69,7 @@ export function KeepRolling({ clips }: { clips: TimelineClip[] }) {
           Scene {nudge.order + 1} ready.
         </p>
         <p className="font-body text-xs text-ink-soft/80">
-          Want Dio to draft the next shot from here?
+          Want Mae to draft the next shot from here?
         </p>
       </div>
       <div className="flex items-center gap-1">
