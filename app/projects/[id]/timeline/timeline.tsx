@@ -78,8 +78,10 @@ export function Timeline({
           />
         </div>
         <p className="font-hand text-base text-ink-soft/80 max-w-xs">
-          clips will appear here as you generate them. ask Dio for a shot to
-          begin, then tap{" "}
+          clips will appear here as you generate them. plan with{" "}
+          <span className="font-hand text-sepia-deep">Ari</span>, then ask{" "}
+          <span className="font-hand text-sepia-deep">Mae</span> to draft
+          shots and tap{" "}
           <span className="font-hand text-sepia-deep">Animate</span> on a
           scene card.
         </p>
