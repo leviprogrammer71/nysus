@@ -6,7 +6,14 @@ export const metadata = {
   title: "Sign in · Nysus",
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const params = await searchParams;
+  const safeReturn = sanitizeReturn(params.next);
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
       <WelcomeSplash />
@@ -23,7 +30,7 @@ export default function LoginPage() {
 
         <div className="w-full rule-ink" />
 
-        <LoginForm />
+        <LoginForm returnTo={safeReturn} />
 
         <footer className="mt-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.2em] text-ink-soft/60 font-body">
           <span className="inline-block w-6 h-px bg-ink/30" />
@@ -33,4 +40,13 @@ export default function LoginPage() {
       </div>
     </main>
   );
+}
+
+/** Only allow relative paths starting with / to prevent open redirect. */
+function sanitizeReturn(raw?: string): string {
+  const fallback = "/video?mode=listing";
+  if (!raw) return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  if (raw.startsWith("//")) return fallback;
+  return raw;
 }

@@ -144,13 +144,16 @@ export async function POST(request: NextRequest) {
 
   // --- Upload to Storage + append to character.reference_images -----
   const slug = slugify(character.name ?? body.character_name);
-  const ext = imageContentType.includes("jpeg") ? "jpg" : "png";
+  // gpt-image-2 returns jpg; never store webp so video models can use
+  // this portrait directly as a seed.
+  const ext = imageContentType.includes("png") ? "png" : "jpg";
+  const finalContentType = ext === "png" ? "image/png" : "image/jpeg";
   const storagePath = `${project.id}/portraits/${slug}.${ext}`;
 
   const { error: uploadErr } = await admin.storage
     .from("clips")
     .upload(storagePath, imageBlob, {
-      contentType: imageContentType,
+      contentType: finalContentType,
       upsert: true,
     });
   if (uploadErr) {

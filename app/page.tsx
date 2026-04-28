@@ -37,16 +37,16 @@ export default async function LandingPage() {
             Gallery
           </Link>
           <Link
-            href="#try"
+            href="/pricing"
             className="hidden sm:inline-flex h-11 items-center px-2.5 font-body text-[11px] uppercase tracking-widest text-ink-soft/80 hover:text-ink transition-colors animate-press"
           >
-            Try it
+            Pricing
           </Link>
           <Link
-            href="/login"
+            href="/login?next=%2Fvideo%3Fmode%3Dlisting"
             className="ml-1 inline-flex h-11 items-center rounded-full bg-ink px-4 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft transition-colors animate-press"
           >
-            Sign in
+            New film →
           </Link>
         </nav>
       </header>
@@ -77,7 +77,7 @@ export default async function LandingPage() {
             browser.
           </p>
           <div className="mt-6 flex flex-col gap-2 sm:mt-7 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <Link href="/login" className="btn-primary w-full sm:w-auto">
+            <Link href="/login?next=%2Fvideo%3Fmode%3Dlisting" className="btn-primary w-full sm:w-auto">
               Start a film →
             </Link>
             <Link href="/gallery" className="btn-secondary w-full sm:w-auto">
@@ -97,6 +97,28 @@ export default async function LandingPage() {
         emptyMessage="Directors' work will appear here as people publish their first cuts."
       />
 
+      {/* What we hand back — ink-block done-for-you positioning */}
+      <section className="mb-10 rounded-xl bg-ink px-6 py-8 sm:px-8 sm:py-10">
+        <p className="font-body text-[10px] uppercase tracking-[0.28em] text-paper/50">
+          What we hand back
+        </p>
+        <h2 className="mt-2 font-display text-2xl text-paper sm:text-3xl">
+          One finished <span className="text-highlight">MP4</span>.
+        </h2>
+        <p className="mt-3 max-w-xl font-body text-[15px] leading-[1.6] text-paper/75">
+          1080p vertical. Your price, location, realtor name, and brokerage
+          burned in as cinematic overlays. Multi-clip reels stitched into a
+          single download — done-for-you, post-ready. Drop it on Reels and
+          walk away.
+        </p>
+        <Link
+          href="/login?next=%2Fvideo%3Fmode%3Dlisting"
+          className="mt-5 inline-flex h-11 items-center rounded-full bg-paper px-5 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-paper-deep transition-colors animate-press"
+        >
+          Try the Listing Bundle →
+        </Link>
+      </section>
+
       {/* Try the assistant */}
       <section className="mb-10 scroll-mt-20" id="try">
         <div className="mb-3">
@@ -110,7 +132,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Feature grid */}
-      <section className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Beat
           step="01"
           title="Ari plans"
@@ -139,7 +161,10 @@ export default async function LandingPage() {
           <Link href="/gallery" className="hover:text-ink">
             Gallery
           </Link>
-          <Link href="/login" className="hover:text-ink">
+          <Link href="/pricing" className="hover:text-ink">
+            Pricing
+          </Link>
+          <Link href="/login?next=%2Fvideo%3Fmode%3Dlisting" className="hover:text-ink">
             Sign in
           </Link>
         </div>
@@ -158,16 +183,22 @@ function Beat({
   body: string;
 }) {
   return (
-    <div className="surface-card animate-lift rounded-xl p-5">
+    <div className="surface-card animate-lift rounded-xl px-4 py-3.5">
       <div className="flex items-center gap-2">
-        <span className="font-display text-sm text-sepia-deep tabular-nums">
+        <span className="font-display text-xs text-sepia-deep tabular-nums">
           {step}
         </span>
-        <span className="font-body text-[10px] uppercase tracking-[0.15em] text-ink-soft/70">
+        <span
+          className="font-body text-[10px] uppercase tracking-[0.15em] text-ink-soft/70"
+          style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+        >
           {title}
         </span>
       </div>
-      <p className="mt-2 font-body text-sm text-ink/90 leading-relaxed">
+      <p
+        className="mt-1.5 font-body text-[13px] text-ink/90 leading-relaxed"
+        style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+      >
         {body}
       </p>
     </div>

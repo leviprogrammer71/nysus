@@ -48,6 +48,14 @@ export interface CreatePredictionArgs<Input> {
    */
   webhook?: string;
   webhook_events_filter?: Array<"start" | "output" | "logs" | "completed">;
+  /**
+   * Hold the connection open up to N seconds for fast jobs to finish
+   * synchronously (Replicate's `Prefer: wait=N` header). Per the
+   * integration guide, set this for image models like gpt-image-2 so
+   * the prediction frequently lands inside the request and we skip
+   * polling. Capped at 60 by Replicate.
+   */
+  preferWaitSeconds?: number;
 }
 
 async function rpc<T>(
@@ -111,6 +119,7 @@ export async function createPrediction<Input>({
   input,
   webhook,
   webhook_events_filter,
+  preferWaitSeconds,
 }: CreatePredictionArgs<Input>): Promise<Prediction<Input>> {
   if (!version && !model) {
     throw new Error("createPrediction: supply `model` or `version`.");
@@ -137,8 +146,15 @@ export async function createPrediction<Input>({
       ? `/predictions`
       : `/models/${resolvedModel}/predictions`;
 
+  // Replicate caps `Prefer: wait` at 60. Snap to that ceiling.
+  const headers: Record<string, string> = {};
+  if (preferWaitSeconds && preferWaitSeconds > 0) {
+    headers.Prefer = `wait=${Math.min(60, Math.floor(preferWaitSeconds))}`;
+  }
+
   return rpc<Prediction<Input>>(path, {
     method: "POST",
+    headers,
     body: JSON.stringify(body),
   });
 }

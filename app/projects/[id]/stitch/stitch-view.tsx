@@ -38,6 +38,10 @@ export function StitchView({
   const [withCaptions, setWithCaptions] = useState(true);
   const [celebration, setCelebration] = useState<StitchCelebration | null>(null);
 
+  // Server-side stitch state
+  const [serverStitching, setServerStitching] = useState(false);
+  const [stitchedUrl, setStitchedUrl] = useState<string | null>(null);
+
   const ready = useMemo(
     () => clips.filter((c) => c.status === "complete"),
     [clips],
@@ -244,6 +248,49 @@ export function StitchView({
     }
   }, [ready, projectId, projectTitle, withNarration, withCaptions, anyCaptionText]);
 
+  /**
+   * Server-side stitch via Replicate's lucataco/ffmpeg-api. Sends signed
+   * clip URLs to /api/stitch, which concatenates + burns overlays server-side.
+   * Result is a single hosted MP4 URL.
+   */
+  const serverStitch = useCallback(async () => {
+    if (ready.length === 0) return;
+    setError(null);
+    setServerStitching(true);
+    setStitchedUrl(null);
+
+    try {
+      // Get signed URLs for each clip.
+      const clipUrls: string[] = [];
+      for (let i = 0; i < ready.length; i++) {
+        const c = ready[i];
+        const res = await fetch(
+          `/api/clips/${c.id}/signed-url?kind=video`,
+          { cache: "no-store" },
+        );
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? res.statusText);
+        clipUrls.push(body.url as string);
+      }
+
+      const res = await fetch("/api/stitch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          clip_urls: clipUrls,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+      setStitchedUrl(body.url as string);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setServerStitching(false);
+    }
+  }, [ready, projectId]);
+
   return (
     <div className="space-y-8">
       {ready.length === 0 ? (
@@ -350,15 +397,62 @@ export function StitchView({
               {ready.length} of {clips.length} ready to export
               {skipped.length > 0 ? ` · ${skipped.length} skipped` : ""}
             </div>
-            <button
-              type="button"
-              onClick={stitch}
-              disabled={ready.length === 0 || progress !== null}
-              className="px-5 py-2.5 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {progress ?? "Export MP4 →"}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={serverStitch}
+                disabled={ready.length === 0 || serverStitching || progress !== null}
+                className="px-5 py-2.5 bg-ink text-paper font-body tracking-wide hover:bg-ink-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {serverStitching ? "Stitching…" : "Stitch into Single MP4"}
+              </button>
+              <button
+                type="button"
+                onClick={stitch}
+                disabled={ready.length === 0 || progress !== null || serverStitching}
+                className="px-5 py-2.5 border border-ink/30 text-ink font-body tracking-wide hover:bg-paper-deep disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {progress ?? "Export in browser →"}
+              </button>
+            </div>
           </div>
+
+          {/* Server-side stitching overlay */}
+          {serverStitching ? (
+            <div className="relative overflow-hidden rounded-lg border border-ink/15 bg-paper-deep p-8 text-center">
+              <div className="animate-icon-spin mx-auto mb-3 h-8 w-8 rounded-full border-2 border-ink/20 border-t-ink" />
+              <p className="font-display text-lg text-ink">
+                Stitching your final cut&hellip;
+              </p>
+              <p className="mt-1 font-body text-sm text-ink-soft/70">
+                Server-side render via Replicate. This may take a minute for
+                multi-clip reels.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Stitched result: player + download */}
+          {stitchedUrl ? (
+            <div className="rounded-lg border border-ink/15 bg-paper-deep p-4 space-y-3">
+              <p className="font-display text-base text-ink">
+                Your final cut is ready.
+              </p>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                src={stitchedUrl}
+                controls
+                playsInline
+                className="w-full max-h-[60vh] rounded bg-ink/5"
+              />
+              <a
+                href={stitchedUrl}
+                download={`${projectTitle.replace(/[^a-z0-9\-_]+/gi, "_").toLowerCase() || "nysus"}-final-cut.mp4`}
+                className="inline-flex h-11 items-center rounded-full bg-ink px-5 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft animate-press"
+              >
+                Download Final Cut
+              </a>
+            </div>
+          ) : null}
 
           {error ? (
             <p className="px-3 py-2 bg-paper border border-red-grease text-red-grease font-hand">
@@ -375,9 +469,9 @@ export function StitchView({
           ) : null}
 
           <p className="font-body text-xs text-ink-soft/60 leading-relaxed">
-            Export runs in your browser via FFmpeg.wasm. Narration audio and
-            captions are mixed locally too — the signed URLs fetch each clip
-            directly from storage.
+            &ldquo;Stitch into Single MP4&rdquo; renders server-side via
+            Replicate with overlays burned in. &ldquo;Export in browser&rdquo;
+            runs FFmpeg.wasm locally with narration and captions.
           </p>
         </>
       )}

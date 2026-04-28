@@ -17,8 +17,8 @@ import { UsageStrip } from "./usage-strip";
 export function AppTopbar({ email }: { email?: string | null }) {
   const pathname = usePathname() ?? "/";
   const tabs = [
-    { href: "/dashboard", label: "Projects" },
-    { href: "/gallery", label: "Gallery" },
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/gallery", label: "My Gallery" },
   ];
 
   return (
@@ -108,6 +108,12 @@ function AccountMenu({ email }: { email: string | null }) {
           className="block px-3 py-2 font-body text-xs text-ink hover:bg-ink/5"
         >
           Profile
+        </Link>
+        <Link
+          href="/my-photos"
+          className="block px-3 py-2 font-body text-xs text-ink hover:bg-ink/5"
+        >
+          My photos
         </Link>
         <form action="/auth/signout" method="post">
           <button

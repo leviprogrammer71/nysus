@@ -170,13 +170,17 @@ export async function POST(request: NextRequest) {
     });
 
     // --- Mirror to Storage ----------------------------------------------
-    const ext = img.contentType.includes("jpeg") ? "jpg" : "png";
+    // gpt-image-2 returns jpg now (output_format: "jpg") — we only
+    // store jpg or png, never webp, so Kling/Seedance never reject the
+    // seed downstream. Per the Replicate integration guide.
+    const ext = img.contentType.includes("png") ? "png" : "jpg";
+    const finalContentType = ext === "png" ? "image/png" : "image/jpeg";
     const storagePath = `${project.id}/stills/${clipId}/image.${ext}`;
 
     const { error: uploadErr } = await admin.storage
       .from("clips")
       .upload(storagePath, img.blob, {
-        contentType: img.contentType,
+        contentType: finalContentType,
         upsert: true,
       });
     if (uploadErr) {

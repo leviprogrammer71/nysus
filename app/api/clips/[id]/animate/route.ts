@@ -8,6 +8,7 @@ import { buildKlingInput, KLING_MODEL } from "@/lib/kling";
 import { shotPromptSchema } from "@/lib/shot-prompt";
 import { gateGeneration, recordUsage } from "@/lib/budget";
 import { resolvePriorLastFrame } from "@/lib/frame-chain";
+import { assertNotWebp } from "@/lib/url-guard";
 import type { AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -123,6 +124,22 @@ export async function POST(_req: NextRequest, { params }: Params) {
   // HTTPS-only — in dev this is null and we rely on the client-side
   // poll for state changes.
   const webhookUrl = replicateWebhookUrl(clip.id);
+
+  // Per the Replicate integration guide: HEAD-check the seed URL
+  // before handing it to Seedance/Kling. Both models reject webp with
+  // a cryptic mime error; better to surface a clear message early.
+  if (seedUrl) {
+    try {
+      await assertNotWebp(seedUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await admin
+        .from("clips")
+        .update({ status: "failed", error_message: msg })
+        .eq("id", clip.id);
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
+  }
 
   try {
     let prediction;

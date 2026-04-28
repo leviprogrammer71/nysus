@@ -5,11 +5,12 @@ import { signIn } from "./actions";
 
 const initialState = { ok: false, message: "" };
 
-export function LoginForm() {
+export function LoginForm({ returnTo }: { returnTo?: string }) {
   const [state, formAction, pending] = useActionState(signIn, initialState);
 
   return (
     <form action={formAction} className="w-full flex flex-col gap-4">
+      {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
       <label className="flex flex-col gap-2">
         <span className="font-hand text-sepia-deep text-base">email</span>
         <input

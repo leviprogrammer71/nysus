@@ -14,6 +14,7 @@ import { ReferenceStrip } from "./edit/reference-strip";
 import { ShareButton } from "@/app/components/share-button";
 import { DraftModeToggle } from "@/app/components/draft-mode-toggle";
 import { KeepRolling } from "@/app/components/keep-rolling";
+import { DeleteProjectButton } from "@/app/components/delete-project-button";
 
 /**
  * Orchestrates the project workspace: chat, timeline, clip detail.
@@ -245,6 +246,10 @@ export function Workspace({
         <div className="flex flex-wrap items-center gap-2">
           <ShareButton projectId={projectId} />
           <DraftModeToggle projectId={projectId} />
+          <DeleteProjectButton
+            projectId={projectId}
+            projectTitle={projectTitle}
+          />
         </div>
       </section>
 

@@ -108,13 +108,18 @@ export async function generateOpenAIImage({
   try {
     prediction = await createPrediction({
       model: OPENAI_IMAGE_MODEL,
+      // Hold the request open up to 60s — gpt-image-2 frequently
+      // finishes inside that window and we skip the poll entirely.
+      preferWaitSeconds: 60,
       input: {
         prompt,
         aspect_ratio: ratio,
         quality,
         background: "auto",
         moderation: "auto",
-        output_format: "png",
+        // JPG, never PNG/WebP — Seedance + Kling reject WebP downstream
+        // and both will animate from the still we hand them.
+        output_format: "jpg",
         number_of_images: 1,
         output_compression: 90,
       },

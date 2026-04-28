@@ -108,13 +108,16 @@ export function MoreMenu() {
             Dashboard
           </MenuLink>
           <MenuLink href="/gallery" icon={<IconGallery />}>
-            Gallery
+            My Gallery
           </MenuLink>
           <MenuLink href="/projects/new" icon={<IconPlus />}>
             New project
           </MenuLink>
           <MenuLink href="/profile" icon={<IconUser />}>
             Profile
+          </MenuLink>
+          <MenuLink href="/my-photos" icon={<IconArchive />}>
+            My photos
           </MenuLink>
 
           {projectId ? (
@@ -328,6 +331,16 @@ function IconPulse() {
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="none"
       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12h4l2-5 4 10 2-5h6" />
+    </svg>
+  );
+}
+function IconArchive() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="none"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+      <path d="M10 12h4" />
     </svg>
   );
 }

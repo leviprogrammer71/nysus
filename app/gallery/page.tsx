@@ -2,9 +2,19 @@ import Link from "next/link";
 import Image from "next/image";
 import { Logomark } from "@/app/components/logomark";
 import { loadGallery } from "@/lib/gallery";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const publicNavLinks = [
+  { href: "/gallery", label: "Gallery" },
+  { href: "/login", label: "Sign in" },
+];
+const authedNavLinks = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/gallery", label: "My Gallery" },
+];
 
 /**
  * Public discovery page. Lists every project whose owner enabled
@@ -13,6 +23,9 @@ export const dynamic = "force-dynamic";
  */
 export default async function GalleryPage() {
   const entries = await loadGallery({ limit: 48 });
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const navLinks = user ? authedNavLinks : publicNavLinks;
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 pb-28 pt-8 sm:px-6">
@@ -24,12 +37,15 @@ export default async function GalleryPage() {
           </span>
         </Link>
         <nav className="flex items-center gap-3 font-body text-xs uppercase tracking-widest text-ink-soft/70">
-          <Link href="/gallery" className="text-ink">
-            Gallery
-          </Link>
-          <Link href="/login" className="hover:text-ink">
-            Sign in
-          </Link>
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={link.href === "/gallery" ? "text-ink" : "hover:text-ink"}
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
       </header>
 
@@ -83,11 +99,17 @@ export default async function GalleryPage() {
                     {e.scene_count} {e.scene_count === 1 ? "scene" : "scenes"}
                   </div>
                 </div>
-                <div className="space-y-0.5 p-3">
-                  <p className="line-clamp-1 font-display text-sm text-ink">
+                <div className="space-y-0.5 px-2.5 py-2">
+                  <p
+                    className="line-clamp-1 font-display text-[13px] text-ink"
+                    style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+                  >
                     {e.title}
                   </p>
-                  <p className="line-clamp-1 font-body text-[11px] text-ink-soft/70">
+                  <p
+                    className="line-clamp-1 font-body text-[11px] text-ink-soft/70"
+                    style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+                  >
                     {e.author}
                   </p>
                 </div>

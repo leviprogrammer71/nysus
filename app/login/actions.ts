@@ -34,9 +34,14 @@ export async function signIn(
 ): Promise<LoginState> {
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
+  const rawReturn = formData.get("returnTo");
   const email =
     typeof rawEmail === "string" ? normalizeEmail(rawEmail) : "";
   const password = typeof rawPassword === "string" ? rawPassword : "";
+  const returnTo =
+    typeof rawReturn === "string" && rawReturn.startsWith("/") && !rawReturn.startsWith("//")
+      ? rawReturn
+      : "/video?mode=listing";
 
   if (!email || !email.includes("@")) {
     return { ok: false, message: "Enter a valid email." };
@@ -53,7 +58,7 @@ export async function signIn(
   // Step 1: try password sign-in.
   const first = await supabase.auth.signInWithPassword({ email, password });
   if (!first.error) {
-    redirect("/dashboard");
+    redirect(returnTo);
   }
 
   // Step 2: sign-in failed. Look up / create the user.
@@ -102,5 +107,5 @@ export async function signIn(
     return { ok: false, message: retry.error.message };
   }
 
-  redirect("/dashboard");
+  redirect(returnTo);
 }

@@ -16,6 +16,7 @@ const PUBLIC_EXACT = new Set<string>([
   "/login",
   "/setup",
   "/gallery",
+  "/pricing",
 ]);
 const PUBLIC_PREFIXES = [
   "/auth/",

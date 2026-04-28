@@ -68,16 +68,22 @@ export function ProjectCard({
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-paper via-paper/60 to-transparent" />
         </div>
-        <div className="relative px-4 py-3 -mt-10">
-          <h2 className="font-display text-xl text-ink leading-tight line-clamp-2">
+        <div className="relative px-3.5 py-2.5 -mt-10">
+          <h2
+            className="font-display text-lg text-ink leading-tight line-clamp-2"
+            style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+          >
             {title}
           </h2>
           {description ? (
-            <p className="font-body text-xs text-ink-soft line-clamp-2 mt-1 leading-snug">
+            <p
+              className="font-body text-xs text-ink-soft line-clamp-2 mt-1 leading-snug"
+              style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+            >
               {description}
             </p>
           ) : null}
-          <p className="font-hand text-sm text-sepia-deep mt-1.5">
+          <p className="font-hand text-xs text-sepia-deep mt-1.5">
             updated {new Date(updatedAt).toLocaleDateString()}
           </p>
         </div>
