@@ -131,16 +131,18 @@ export async function generateOpenAIImage({
     );
   }
 
-  // Poll up to 90s. gpt-image-2 on "high" typically settles in 15-30s
-  // but a cold GPU can push past a minute.
-  const deadline = Date.now() + 90_000;
+  // Poll up to 180s. The Prefer: wait=60 header above already swallows
+  // the first 60s, so this loop covers the long tail. We've measured
+  // cold-GPU runs at 130s+ so the floor must be well past that — at
+  // 90s we 502'd legitimately-still-processing predictions.
+  const deadline = Date.now() + 180_000;
   let final = prediction;
   while (
     (final.status === "starting" || final.status === "processing") &&
     Date.now() < deadline
   ) {
     if (signal?.aborted) throw new Error("Aborted");
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 2000));
     try {
       final = await getPrediction(prediction.id);
     } catch (err) {
@@ -149,7 +151,11 @@ export async function generateOpenAIImage({
   }
 
   if (final.status !== "succeeded") {
-    const err = String(final.error ?? `gpt-image-2 ${final.status}`);
+    // Surface enough detail to debug from Replicate's predictions
+    // dashboard if the user wants to investigate further.
+    const err = String(
+      final.error ?? `gpt-image-2 ${final.status} (id ${final.id})`,
+    );
     throw new Error(err);
   }
 

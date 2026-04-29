@@ -16,7 +16,10 @@ import { awardEvent } from "@/lib/progress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+// gpt-image-2 cold runs land in the 120-150s range; keep ahead of
+// the lib/openai-images.ts 180s poll deadline so we don't kill the
+// route while it's still waiting.
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   project_id: z.string().uuid(),

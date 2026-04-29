@@ -16,7 +16,10 @@ import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// gpt-image-2 cold runs land in the 120-150s range. 300s gives us
+// plenty of headroom past the 180s poll deadline in
+// lib/openai-images.ts.
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   project_id: z.string().uuid(),
