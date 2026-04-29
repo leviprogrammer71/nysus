@@ -103,16 +103,20 @@ export function MaeBoard({
         ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-3">
         {clips.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+            <span className="text-sepia-deep/60 animate-icon-wiggle">
+              <MaeGlyph size={36} />
+            </span>
             <p className="font-display text-base text-ink">
-              No scenes yet.
+              The board is quiet.
             </p>
-            <p className="font-body text-sm text-ink-soft/80 leading-relaxed">
-              Ari drafts the cast and the aesthetic with you on the left,
-              then emits scene cards. They&rsquo;ll land here ready to
-              generate.
+            <p className="max-w-[28ch] font-body text-sm text-ink-soft/80 leading-relaxed">
+              Ari holds the thread on the left. When she emits scenes,
+              they land here ready for the rite —{" "}
+              <span className="font-hand text-sepia-deep">a still, a clip,
+              a cut</span>.
             </p>
           </div>
         ) : (

@@ -67,39 +67,40 @@ export function DualChat({
 
   return (
     <div className="mb-8">
-      {/* Tab strip — shows which pane is focused on mobile, clickable
-          on desktop. Always visible so the mythological framing reads. */}
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-0.5 rounded-full border border-ink/15 bg-paper-deep p-0.5">
-          <button
-            type="button"
+      {/* Tab strip — two equal halves with a sliding underline that
+          tracks the active pane. Mythology reads quietly:
+          'the thread' for Ari, 'the rite' for Mae. */}
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div
+          role="tablist"
+          aria-label="Chat panes"
+          className="relative flex w-full max-w-[280px] border-b border-ink/10"
+        >
+          <TabButton
+            active={activePane === "ari"}
             onClick={() => scrollTo("ari")}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-body text-[11px] uppercase tracking-widest animate-press ${
-              activePane === "ari"
-                ? "bg-paper text-ink shadow-[0_1px_2px_rgba(27,42,58,0.08)]"
-                : "text-ink-soft/70 hover:text-ink"
-            }`}
-            aria-pressed={activePane === "ari"}
-          >
-            <AriGlyph size={14} />
-            Ari
-          </button>
-          <button
-            type="button"
+            label="Ari"
+            sub="the thread"
+            glyph={<AriGlyph size={15} />}
+          />
+          <TabButton
+            active={activePane === "mae"}
             onClick={() => scrollTo("mae")}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-body text-[11px] uppercase tracking-widest animate-press ${
-              activePane === "mae"
-                ? "bg-paper text-ink shadow-[0_1px_2px_rgba(27,42,58,0.08)]"
-                : "text-ink-soft/70 hover:text-ink"
-            }`}
-            aria-pressed={activePane === "mae"}
-          >
-            <MaeGlyph size={14} />
-            Mae
-          </button>
+            label="Mae"
+            sub="the rite"
+            glyph={<MaeGlyph size={15} />}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute bottom-[-1px] h-0.5 w-1/2 rounded-full bg-ink transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            style={{
+              transform:
+                activePane === "ari" ? "translateX(0%)" : "translateX(100%)",
+            }}
+          />
         </div>
-        <span className="font-body text-[10px] uppercase tracking-[0.18em] text-ink-soft/60">
-          {activePane === "ari" ? "the thread" : "the rite"}
+        <span className="font-body text-[10px] uppercase tracking-[0.22em] text-ink-soft/60">
+          {clips.length} {clips.length === 1 ? "scene" : "scenes"}
         </span>
       </div>
 
@@ -178,5 +179,47 @@ export function DualChat({
         </section>
       </div>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  sub,
+  glyph,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  sub: string;
+  glyph: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`group flex flex-1 flex-col items-start py-2 pr-3 text-left transition-colors animate-press ${
+        active ? "text-ink" : "text-ink-soft/65 hover:text-ink"
+      }`}
+    >
+      <span className="flex items-center gap-1.5">
+        <span
+          className={`transition-colors ${
+            active ? "text-sepia-deep" : "text-ink-soft/40"
+          }`}
+        >
+          {glyph}
+        </span>
+        <span className="font-display text-sm uppercase tracking-[0.22em]">
+          {label}
+        </span>
+      </span>
+      <span className="font-hand text-[11px] text-ink-soft/55 leading-none mt-0.5">
+        {sub}
+      </span>
+    </button>
   );
 }

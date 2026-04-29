@@ -272,21 +272,27 @@ export function Workspace({
         ) : null}
       </section>
 
-      {/* Scene outputs below the chat — the derivatives of the
-          conversation above. */}
-      <StillsPanel clips={clips} onOpen={setOpenClipId} />
-
-      <section id="timeline" className="mb-6 scroll-mt-20">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-display text-base uppercase tracking-widest text-ink">
-            Scenes
-          </h2>
-          <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
-            {clips.length} {clips.length === 1 ? "clip" : "clips"}
-          </span>
-        </div>
-        <Timeline clips={clips} onOpen={setOpenClipId} />
-      </section>
+      {/* Scene outputs below the chat — only when there's something
+          to show. Mae's board (above, in DualChat) is the primary
+          canvas; this lower section is the rendered-clips timeline so
+          you can scrub the finished film without scrolling Mae. */}
+      {clips.some((c) => c.status === "complete" || c.still_image_url) ? (
+        <>
+          <StillsPanel clips={clips} onOpen={setOpenClipId} />
+          <section id="timeline" className="mb-6 scroll-mt-20">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="font-display text-base uppercase tracking-widest text-ink">
+                Rendered clips
+              </h2>
+              <span className="font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
+                {clips.filter((c) => c.status === "complete").length} of{" "}
+                {clips.length}
+              </span>
+            </div>
+            <Timeline clips={clips} onOpen={setOpenClipId} />
+          </section>
+        </>
+      ) : null}
 
       <CharacterSheetPanel projectId={projectId} sheet={characterSheet} />
 
