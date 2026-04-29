@@ -208,12 +208,14 @@ export const DIRECTOR_TOOLS: ToolDefinition[] = [
   },
 ];
 
-/** Tools exposed to Ari — no money-spending actions. */
-export const ARI_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS.filter(
-  (t) => t.function.name !== "generate_character_portrait",
-);
-
-/** Tools exposed to Mae — full set including portrait generation. */
+/**
+ * Tools exposed to Ari. She's now the conversational + planner +
+ * scene-drafter; the only paid call she makes is generate_character_portrait
+ * because portraits anchor every still's face. Mae is no longer an
+ * LLM — she's a silent execution board, so MAE_TOOLS is unused (kept
+ * for backward compat).
+ */
+export const ARI_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
 export const MAE_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
 
 // --- Tool executor -------------------------------------------------

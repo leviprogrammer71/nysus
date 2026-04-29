@@ -22,45 +22,31 @@ export default async function ProjectPage({ params }: PageProps) {
   if (error) throw error;
   if (!project) notFound();
 
-  const [{ data: ariMessagesRaw }, { data: maeMessagesRaw }, { data: clipsRaw }] =
-    await Promise.all([
-      supabase
-        .from("messages")
-        .select("id, role, content, created_at")
-        .eq("project_id", project.id)
-        .eq("chat_mode", "ari")
-        .order("created_at", { ascending: true })
-        .limit(200),
-      supabase
-        .from("messages")
-        .select("id, role, content, created_at")
-        .eq("project_id", project.id)
-        .eq("chat_mode", "mae")
-        .order("created_at", { ascending: true })
-        .limit(200),
-      supabase
-        .from("clips")
-        .select(
-          "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration, created_at",
-        )
-        .eq("project_id", project.id)
-        .order("order_index", { ascending: true }),
-    ]);
-
-  const toChatMessages = (
-    rows:
-      | Array<{ id: string; role: string; content: string; created_at: string }>
-      | null,
-  ): ChatMessage[] =>
-    (rows ?? [])
-      .filter(
-        (m): m is { id: string; role: "user" | "assistant"; content: string; created_at: string } =>
-          m.role === "user" || m.role === "assistant",
+  // Mae's no longer a chat — she's an execution board fed directly
+  // by the clips table. So we only need Ari's history here.
+  const [{ data: ariMessagesRaw }, { data: clipsRaw }] = await Promise.all([
+    supabase
+      .from("messages")
+      .select("id, role, content, created_at")
+      .eq("project_id", project.id)
+      .eq("chat_mode", "ari")
+      .order("created_at", { ascending: true })
+      .limit(200),
+    supabase
+      .from("clips")
+      .select(
+        "id, project_id, order_index, prompt, shot_metadata, seed_image_url, seed_source, video_url, last_frame_url, sampled_frames_urls, status, replicate_prediction_id, error_message, still_image_url, still_prompt, still_status, still_replicate_prediction_id, narration, created_at",
       )
-      .map((m) => ({ id: m.id, role: m.role, content: m.content }));
+      .eq("project_id", project.id)
+      .order("order_index", { ascending: true }),
+  ]);
 
-  const initialAriMessages = toChatMessages(ariMessagesRaw);
-  const initialMaeMessages = toChatMessages(maeMessagesRaw);
+  const initialAriMessages: ChatMessage[] = (ariMessagesRaw ?? [])
+    .filter(
+      (m): m is { id: string; role: "user" | "assistant"; content: string; created_at: string } =>
+        m.role === "user" || m.role === "assistant",
+    )
+    .map((m) => ({ id: m.id, role: m.role, content: m.content }));
 
   const initialClips: TimelineClip[] = (clipsRaw ?? []) as TimelineClip[];
 
@@ -73,7 +59,6 @@ export default async function ProjectPage({ params }: PageProps) {
       projectTitle={project.title}
       projectDescription={project.description}
       initialAriMessages={initialAriMessages}
-      initialMaeMessages={initialMaeMessages}
       initialClips={initialClips}
       updatedAt={project.updated_at}
       characterSheet={sheet}

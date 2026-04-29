@@ -2,8 +2,10 @@
 
 import { useCallback, useRef, useState } from "react";
 import { ChatPanel } from "./chat-panel";
+import { MaeBoard } from "./mae-board";
 import type { ChatMessage } from "./message";
 import type { ShotPrompt } from "@/lib/shot-prompt";
+import type { TimelineClip } from "../timeline/types";
 import { AriGlyph, MaeGlyph } from "@/app/components/mythic-glyphs";
 
 /**
@@ -28,12 +30,13 @@ import { AriGlyph, MaeGlyph } from "@/app/components/mythic-glyphs";
 export function DualChat({
   projectId,
   initialAriMessages,
-  initialMaeMessages,
+  clips,
   onGenerate,
 }: {
   projectId: string;
   initialAriMessages: ChatMessage[];
-  initialMaeMessages: ChatMessage[];
+  /** Live clip rows for the project — Mae's board renders these. */
+  clips: TimelineClip[];
   onGenerate?: (shot: ShotPrompt) => Promise<void>;
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -48,16 +51,9 @@ export function DualChat({
   }, []);
 
   const handoff = useCallback(() => {
-    // Prefill Mae with a kickoff message that references the project
-    // context. Ari has already written the sheet + bible; Mae reads
-    // them via PROJECT CONTEXT on the next turn.
-    const kickoff =
-      "Ari and I worked out the cast, the aesthetic, and the through-line. Read the project context and draft the opening three shots. Start with a portrait for each lead if we don't have one yet.";
-    window.dispatchEvent(
-      new CustomEvent("nysus:prefill-chat:mae", {
-        detail: { text: kickoff },
-      }),
-    );
+    // Mae is no longer chat — clicking "Send to Mae" just slides the
+    // user over to her board so they can act on whatever Ari has
+    // already drafted.
     scrollTo("mae");
   }, [scrollTo]);
 
@@ -178,13 +174,7 @@ export function DualChat({
               </span>
             </div>
           </header>
-          <ChatPanel
-            projectId={projectId}
-            initialMessages={initialMaeMessages}
-            mode="mae"
-            prefillEventName="nysus:prefill-chat:mae"
-            onGenerate={onGenerate}
-          />
+          <MaeBoard projectId={projectId} clips={clips} />
         </section>
       </div>
     </div>

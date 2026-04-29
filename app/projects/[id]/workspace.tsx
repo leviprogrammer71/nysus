@@ -26,7 +26,6 @@ export function Workspace({
   projectTitle,
   projectDescription,
   initialAriMessages,
-  initialMaeMessages,
   initialClips,
   updatedAt,
   characterSheet,
@@ -36,7 +35,6 @@ export function Workspace({
   projectTitle: string;
   projectDescription: string | null;
   initialAriMessages: ChatMessage[];
-  initialMaeMessages: ChatMessage[];
   initialClips: TimelineClip[];
   updatedAt: string;
   characterSheet: CharacterSheet;
@@ -261,7 +259,7 @@ export function Workspace({
         <DualChat
           projectId={projectId}
           initialAriMessages={initialAriMessages}
-          initialMaeMessages={initialMaeMessages}
+          clips={clips}
           onGenerate={generateFromShot}
         />
         {genError ? (
