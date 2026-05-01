@@ -119,6 +119,9 @@ export function MoreMenu() {
           <MenuLink href="/my-photos" icon={<IconArchive />}>
             My photos
           </MenuLink>
+          <MenuLink href="/playground" icon={<IconForge />}>
+            Playground
+          </MenuLink>
 
           {projectId ? (
             <>
@@ -341,6 +344,19 @@ function IconArchive() {
       <rect x="3" y="4" width="18" height="4" rx="1" />
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
       <path d="M10 12h4" />
+    </svg>
+  );
+}
+function IconForge() {
+  // The threshold — a small anvil + spark for the Playground.
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden fill="none"
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 13h12a3 3 0 0 0 3-3" />
+      <path d="M6 13v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3" />
+      <path d="M8 17v3" />
+      <path d="M12 17v3" />
+      <path d="M19 5l1 2-2 1 1 2" />
     </svg>
   );
 }

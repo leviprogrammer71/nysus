@@ -15,6 +15,8 @@ import { ShareButton } from "@/app/components/share-button";
 import { DraftModeToggle } from "@/app/components/draft-mode-toggle";
 import { KeepRolling } from "@/app/components/keep-rolling";
 import { DeleteProjectButton } from "@/app/components/delete-project-button";
+import { StageRail } from "@/app/components/stage-rail";
+import type { ProjectStage } from "@/lib/supabase/types";
 
 /**
  * Orchestrates the project workspace: chat, timeline, clip detail.
@@ -26,19 +28,28 @@ export function Workspace({
   projectTitle,
   projectDescription,
   initialAriMessages,
+  initialConceptMessages,
+  initialScriptMessages,
   initialClips,
   updatedAt,
   characterSheet,
   aestheticBible,
+  initialStage,
 }: {
   projectId: string;
   projectTitle: string;
   projectDescription: string | null;
+  /** Legacy alias — points at the Liturgy ledger. */
   initialAriMessages: ChatMessage[];
+  /** Oracle (concept) ledger — pre-Liturgy ideation thread. */
+  initialConceptMessages?: ChatMessage[];
+  /** Liturgy (script) ledger — scene drafting + legacy "ari" rows. */
+  initialScriptMessages?: ChatMessage[];
   initialClips: TimelineClip[];
   updatedAt: string;
   characterSheet: CharacterSheet;
   aestheticBible: AestheticBible;
+  initialStage: ProjectStage;
 }) {
   const [clips, setClips] = useState<TimelineClip[]>(
     [...initialClips].sort((a, b) => a.order_index - b.order_index),
@@ -251,6 +262,24 @@ export function Workspace({
         </div>
       </section>
 
+      {/* The Procession — six stages from seed to cut, rendered as a
+          quiet ritual rail just above the chat. Tapping a stage is a
+          nudge, not a gate; the underlying state advances naturally as
+          the user works. */}
+      <StageRail
+        projectId={projectId}
+        initialStage={initialStage}
+        readiness={{
+          concept:
+            (characterSheet.characters?.length ?? 0) > 0,
+          script: clips.length > 0,
+          scenes: clips.length > 0,
+          image: clips.some((c) => c.still_status === "complete"),
+          animate: clips.some((c) => c.status === "complete"),
+          stitch: clips.filter((c) => c.status === "complete").length >= 2,
+        }}
+      />
+
       {/* Chat comes FIRST — it's the driver for everything else.
           Two panes: Ari plans and Mae builds. User swipes between
           them on mobile, sees both on desktop. */}
@@ -259,6 +288,8 @@ export function Workspace({
         <DualChat
           projectId={projectId}
           initialAriMessages={initialAriMessages}
+          initialConceptMessages={initialConceptMessages ?? []}
+          initialScriptMessages={initialScriptMessages ?? initialAriMessages}
           clips={clips}
           onGenerate={generateFromShot}
         />

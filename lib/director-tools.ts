@@ -3,7 +3,9 @@ import type {
   AestheticBible,
   CharacterSheet,
   Database,
+  SceneBibleOverrides,
 } from "@/lib/supabase/types";
+import type { ShotPromptMetadata } from "@/lib/shot-prompt";
 
 /**
  * Director tools.
@@ -209,6 +211,61 @@ export const DIRECTOR_TOOLS: ToolDefinition[] = [
 ];
 
 /**
+ * Scene-scoped tools — Rite mode only. The active scene is bound on
+ * the chat thread (scene_id), so the model doesn't need to pass it.
+ */
+export const SCENE_TOOLS_ONLY: ToolDefinition[] = [
+  {
+    type: "function",
+    function: {
+      name: "update_scene_prompt",
+      description:
+        "Refine the bound scene's prompts. Pass any combination of: image_prompt (for the still), prompt (for the motion clip), narration, voice_direction, animation_model. Fields you omit are left unchanged. The active scene_id is bound on this thread — you do not pass it.",
+      parameters: {
+        type: "object",
+        properties: {
+          image_prompt: { type: "string" },
+          prompt: { type: "string" },
+          narration: { type: "string" },
+          voice_direction: { type: "string" },
+          animation_model: {
+            type: "string",
+            enum: ["seedance", "kling"],
+          },
+          summary: { type: "string" },
+        },
+        required: ["summary"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_scene_bible_overrides",
+      description:
+        "Set per-scene bible overrides on the bound scene. Use this for surgical breaks from the global bible: omit a character, drop the global style for this scene, or attach free-form notes the still / motion prompts should respect.",
+      parameters: {
+        type: "object",
+        properties: {
+          disable_character_ids: {
+            type: "array",
+            items: { type: "string" },
+            description: "Character names to omit when injecting the bible.",
+          },
+          disable_style: {
+            type: "boolean",
+            description: "If true, ignore the bible's visual_style/palette/camera for this scene.",
+          },
+          notes: { type: "string" },
+          summary: { type: "string" },
+        },
+        required: ["summary"],
+      },
+    },
+  },
+];
+
+/**
  * Tools exposed to Ari. She's now the conversational + planner +
  * scene-drafter; the only paid call she makes is generate_character_portrait
  * because portraits anchor every still's face. Mae is no longer an
@@ -217,6 +274,26 @@ export const DIRECTOR_TOOLS: ToolDefinition[] = [
  */
 export const ARI_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
 export const MAE_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
+
+/**
+ * Per-mode tool sets for the StoryFlow split.
+ *   concept (Oracle)  — project-level writing only.
+ *   script  (Liturgy) — same set; the difference lives in the system prompt.
+ *   scene   (Rite)    — scene-level writing PLUS update_aesthetic_bible
+ *                       (escape hatch when the user explicitly says so)
+ *                       and generate_character_portrait (new char).
+ */
+export const CONCEPT_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
+export const SCRIPT_TOOLS: ToolDefinition[] = DIRECTOR_TOOLS;
+export const SCENE_TOOLS: ToolDefinition[] = [
+  ...SCENE_TOOLS_ONLY,
+  // Reach back to the global bible only when the user explicitly asks.
+  ...DIRECTOR_TOOLS.filter(
+    (t) =>
+      t.function.name === "update_aesthetic_bible" ||
+      t.function.name === "generate_character_portrait",
+  ),
+];
 
 // --- Tool executor -------------------------------------------------
 
@@ -227,6 +304,12 @@ export type ToolContext = {
   origin: string;
   /** Session cookies forwarded to internal routes. */
   cookieHeader?: string;
+  /**
+   * Active scene the chat thread is bound to. Required for Rite mode
+   * tools (update_scene_prompt, update_scene_bible_overrides); ignored
+   * by other tools.
+   */
+  sceneId?: string;
 };
 
 export type ToolResult = {
@@ -271,6 +354,10 @@ export async function executeDirectorTool(
         return await runUpdateProjectMeta(args, ctx);
       case "generate_character_portrait":
         return await runGeneratePortrait(args, ctx);
+      case "update_scene_prompt":
+        return await runUpdateScenePrompt(args, ctx);
+      case "update_scene_bible_overrides":
+        return await runUpdateSceneBibleOverrides(args, ctx);
       default:
         return {
           result: `ERROR: no such tool: ${name}`,
@@ -499,6 +586,183 @@ async function runGeneratePortrait(
       name: "generate_character_portrait",
       summary,
       detail: `${name} — portrait saved`,
+    },
+  };
+}
+
+async function runUpdateScenePrompt(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  const summary =
+    typeof args.summary === "string"
+      ? args.summary
+      : "refined the scene prompt";
+  if (!ctx.sceneId) {
+    return {
+      result: "ERROR: no scene bound to this thread.",
+      event: {
+        name: "update_scene_prompt",
+        summary: "no scene bound — call from a Rite thread",
+      },
+    };
+  }
+
+  // Read the existing clip + its shot_metadata so we can patch the
+  // prompt/narration/animation_model fields without losing other
+  // metadata Mae or the timeline rely on.
+  const { data: clip, error: readErr } = await ctx.admin
+    .from("clips")
+    .select(
+      "id, prompt, still_prompt, narration, shot_metadata, project_id",
+    )
+    .eq("id", ctx.sceneId)
+    .eq("project_id", ctx.projectId)
+    .single();
+  if (readErr || !clip) {
+    return {
+      result: `ERROR: ${readErr?.message ?? "scene not found"}`,
+      event: {
+        name: "update_scene_prompt",
+        summary: "scene read failed",
+      },
+    };
+  }
+
+  const meta: ShotPromptMetadata = {
+    ...((clip.shot_metadata ?? {}) as ShotPromptMetadata),
+  };
+  const patch: Database["public"]["Tables"]["clips"]["Update"] = {};
+  const touched: string[] = [];
+
+  if (typeof args.image_prompt === "string" && args.image_prompt.trim()) {
+    const v = args.image_prompt.trim();
+    patch.still_prompt = v;
+    meta.image_prompt = v;
+    touched.push("still");
+  }
+  if (typeof args.prompt === "string" && args.prompt.trim()) {
+    const v = args.prompt.trim();
+    patch.prompt = v;
+    touched.push("motion");
+  }
+  if (typeof args.narration === "string") {
+    const v = args.narration.trim();
+    patch.narration = v.length > 0 ? v : null;
+    meta.narration = v;
+    touched.push("narration");
+  }
+  if (typeof args.voice_direction === "string") {
+    const v = args.voice_direction.trim();
+    meta.voice_direction = v;
+    touched.push("voice");
+  }
+  if (
+    args.animation_model === "seedance" ||
+    args.animation_model === "kling"
+  ) {
+    meta.animation_model = args.animation_model;
+    touched.push("animation model");
+  }
+
+  patch.shot_metadata = meta;
+
+  const { error: writeErr } = await ctx.admin
+    .from("clips")
+    .update(patch)
+    .eq("id", ctx.sceneId)
+    .eq("project_id", ctx.projectId);
+  if (writeErr) {
+    return {
+      result: `ERROR: ${writeErr.message}`,
+      event: {
+        name: "update_scene_prompt",
+        summary: `failed — ${writeErr.message}`,
+      },
+    };
+  }
+
+  if (touched.length === 0) {
+    return {
+      result:
+        "ok: nothing to update — at least one of image_prompt, prompt, narration, voice_direction, animation_model is required.",
+      event: {
+        name: "update_scene_prompt",
+        summary: "no fields supplied",
+      },
+    };
+  }
+
+  return {
+    result: `ok: ${summary}. Touched: ${touched.join(", ")}.`,
+    event: {
+      name: "update_scene_prompt",
+      summary,
+      detail: `touched: ${touched.join(" · ")}`,
+    },
+  };
+}
+
+async function runUpdateSceneBibleOverrides(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  const summary =
+    typeof args.summary === "string"
+      ? args.summary
+      : "set per-scene bible overrides";
+  if (!ctx.sceneId) {
+    return {
+      result: "ERROR: no scene bound to this thread.",
+      event: {
+        name: "update_scene_bible_overrides",
+        summary: "no scene bound — call from a Rite thread",
+      },
+    };
+  }
+
+  const overrides: SceneBibleOverrides = {};
+  if (Array.isArray(args.disable_character_ids)) {
+    const ids = (args.disable_character_ids as unknown[])
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((v) => v.trim());
+    if (ids.length > 0) overrides.disable_character_ids = ids;
+  }
+  if (typeof args.disable_style === "boolean") {
+    overrides.disable_style = args.disable_style;
+  }
+  if (typeof args.notes === "string" && args.notes.trim()) {
+    overrides.notes = args.notes.trim();
+  }
+
+  const { error } = await ctx.admin
+    .from("clips")
+    .update({ bible_overrides: overrides })
+    .eq("id", ctx.sceneId)
+    .eq("project_id", ctx.projectId);
+  if (error) {
+    return {
+      result: `ERROR: ${error.message}`,
+      event: {
+        name: "update_scene_bible_overrides",
+        summary: `failed — ${error.message}`,
+      },
+    };
+  }
+
+  const detailParts: string[] = [];
+  if (overrides.disable_character_ids?.length)
+    detailParts.push(`omit: ${overrides.disable_character_ids.join(", ")}`);
+  if (overrides.disable_style) detailParts.push("style off");
+  if (overrides.notes)
+    detailParts.push(`notes: ${overrides.notes.slice(0, 60)}`);
+
+  return {
+    result: `ok: ${summary}.`,
+    event: {
+      name: "update_scene_bible_overrides",
+      summary,
+      detail: detailParts.length > 0 ? detailParts.join(" · ") : "cleared",
     },
   };
 }

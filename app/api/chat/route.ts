@@ -12,12 +12,33 @@ import {
 import { ARI_SYSTEM_PROMPT, buildAriContextSuffix } from "@/lib/prompts/ari";
 import { MAE_SYSTEM_PROMPT } from "@/lib/prompts/mae";
 import {
+  CONCEPT_SYSTEM_PROMPT,
+  buildConceptContextSuffix,
+} from "@/lib/prompts/concept";
+import {
+  SCRIPT_SYSTEM_PROMPT,
+  buildScriptContextSuffix,
+} from "@/lib/prompts/script";
+import {
+  SCENE_SYSTEM_PROMPT,
+  buildSceneContextSuffix,
+} from "@/lib/prompts/scene";
+import {
   ARI_TOOLS,
   MAE_TOOLS,
+  CONCEPT_TOOLS,
+  SCRIPT_TOOLS,
+  SCENE_TOOLS,
   executeDirectorTool,
+  type ToolDefinition,
 } from "@/lib/director-tools";
 import { collectLabeledRefs } from "@/lib/references";
-import type { CharacterSheet, AestheticBible } from "@/lib/supabase/types";
+import type {
+  CharacterSheet,
+  AestheticBible,
+  ChatMode,
+} from "@/lib/supabase/types";
+import type { ShotPromptMetadata } from "@/lib/shot-prompt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,13 +48,64 @@ const bodySchema = z.object({
   project_id: z.string().uuid(),
   message: z.string().trim().min(1).max(8000),
   attached_image_urls: z.array(z.string().url()).max(8).optional(),
-  /** Which half of the director the message is going to. Defaults to Ari (planner). */
-  mode: z.enum(["ari", "mae"]).default("ari"),
+  /**
+   * Which half of the director the message is going to.
+   *   - ari    — legacy alias, routed to Liturgy (script) mode.
+   *   - mae    — legacy executor chat (Mae no longer chats; left in for
+   *              read-only history tabs).
+   *   - concept — Oracle: free-form ideation pre-Liturgy.
+   *   - script  — Liturgy: scene drafting (json-shot blocks).
+   *   - scene   — Rite: per-scene refinement, requires scene_id.
+   */
+  mode: z
+    .enum(["ari", "mae", "concept", "script", "scene"])
+    .default("script"),
+  /** Required when mode === "scene". The clip the Rite is bound to. */
+  scene_id: z.string().uuid().optional(),
 });
 
 const HISTORY_LIMIT = 40;
 /** Cap on how many tool-call rounds per user turn. Defensive. */
 const MAX_TOOL_ROUNDS = 5;
+
+function pickSystemPrompt(
+  mode: "ari" | "mae" | "concept" | "script" | "scene",
+): string {
+  switch (mode) {
+    case "concept":
+      return CONCEPT_SYSTEM_PROMPT;
+    case "script":
+      return SCRIPT_SYSTEM_PROMPT;
+    case "scene":
+      return SCENE_SYSTEM_PROMPT;
+    case "mae":
+      return MAE_SYSTEM_PROMPT;
+    case "ari":
+    default:
+      // Legacy "ari" rows came from before the StoryFlow split. Treat
+      // them as Liturgy (script) so the historical ledger stays
+      // coherent.
+      return ARI_SYSTEM_PROMPT;
+  }
+}
+
+function pickTools(
+  mode: "ari" | "mae" | "concept" | "script" | "scene",
+): ToolDefinition[] {
+  switch (mode) {
+    case "concept":
+      return CONCEPT_TOOLS;
+    case "script":
+      return SCRIPT_TOOLS;
+    case "scene":
+      return SCENE_TOOLS;
+    case "mae":
+      return MAE_TOOLS;
+    case "ari":
+    default:
+      return ARI_TOOLS;
+  }
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -54,6 +126,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Rite mode requires a scene binding. Reject up front so the
+  // model is never asked to refine "the active scene" with no scene.
+  if (body.mode === "scene" && !body.scene_id) {
+    return NextResponse.json(
+      { error: "scene_id required for Rite mode" },
+      { status: 400 },
+    );
+  }
+
+  // The Liturgy and the Oracle live under different chat_mode keys
+  // so each thread is its own ledger. "ari" is treated as a legacy
+  // alias for "script" — historical rows stay readable, new rows
+  // land under the canonical key.
+  const persistedMode: ChatMode =
+    body.mode === "ari" ? "script" : (body.mode as ChatMode);
+
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, title, character_sheet, aesthetic_bible")
@@ -66,11 +154,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const { data: priorMessages, error: messagesError } = await supabase
+  // Build the chat_mode filter. Liturgy threads should also see the
+  // legacy "ari" rows so users on long-running projects don't lose
+  // their planning history; Rite threads scope down to the active
+  // scene_id so different scenes have different ledgers.
+  let priorQuery = supabase
     .from("messages")
     .select("role, content")
-    .eq("project_id", project.id)
-    .eq("chat_mode", body.mode)
+    .eq("project_id", project.id);
+  if (persistedMode === "script") {
+    priorQuery = priorQuery.in("chat_mode", ["script", "ari"]);
+  } else {
+    priorQuery = priorQuery.eq("chat_mode", persistedMode);
+  }
+  if (persistedMode === "scene" && body.scene_id) {
+    priorQuery = priorQuery.eq("scene_id", body.scene_id);
+  }
+  const { data: priorMessages, error: messagesError } = await priorQuery
     .order("created_at", { ascending: true })
     .limit(HISTORY_LIMIT);
 
@@ -95,7 +195,10 @@ export async function POST(request: NextRequest) {
       role: "user",
       content: body.message,
       attached_frame_urls: attachedImageUrls,
-      chat_mode: body.mode,
+      chat_mode: persistedMode,
+      ...(persistedMode === "scene" && body.scene_id
+        ? { scene_id: body.scene_id }
+        : {}),
     })
     .select("id, created_at")
     .single();
@@ -124,12 +227,70 @@ export async function POST(request: NextRequest) {
 
     const sheet = (data?.character_sheet ?? project!.character_sheet ?? {}) as CharacterSheet;
     const bible = (data?.aesthetic_bible ?? project!.aesthetic_bible ?? {}) as AestheticBible;
+    const title = data?.title ?? project!.title;
 
-    const suffix = buildAriContextSuffix({
-      title: data?.title ?? project!.title,
-      character_sheet: sheet,
-      aesthetic_bible: bible,
-    });
+    let suffix: string;
+    if (body.mode === "concept") {
+      suffix = buildConceptContextSuffix({
+        title,
+        character_sheet: sheet,
+        aesthetic_bible: bible,
+      });
+    } else if (body.mode === "script" || body.mode === "ari") {
+      // Look up the highest existing shot_number so Ari continues
+      // numbering when she adds to a draft.
+      const { data: maxClip } = await admin
+        .from("clips")
+        .select("shot_metadata, order_index")
+        .eq("project_id", project!.id)
+        .order("order_index", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const maxShotNumber =
+        ((maxClip?.shot_metadata as ShotPromptMetadata | null)?.shot_number ??
+          maxClip?.order_index ??
+          0) || 0;
+      suffix = buildScriptContextSuffix({
+        title,
+        character_sheet: sheet,
+        aesthetic_bible: bible,
+        highest_shot_number: maxShotNumber,
+      });
+    } else if (body.mode === "scene" && body.scene_id) {
+      const { data: clip } = await admin
+        .from("clips")
+        .select(
+          "id, order_index, prompt, still_prompt, narration, shot_metadata, still_status, status, bible_overrides",
+        )
+        .eq("id", body.scene_id)
+        .eq("project_id", project!.id)
+        .single();
+      const meta = (clip?.shot_metadata ?? {}) as ShotPromptMetadata;
+      suffix = buildSceneContextSuffix({
+        title,
+        character_sheet: sheet,
+        aesthetic_bible: bible,
+        scene: {
+          id: clip?.id ?? body.scene_id,
+          order_index: clip?.order_index ?? -1,
+          prompt: clip?.prompt ?? null,
+          image_prompt: clip?.still_prompt ?? meta.image_prompt ?? null,
+          motion_prompt: clip?.prompt ?? null,
+          narration: clip?.narration ?? meta.narration ?? null,
+          still_status: clip?.still_status ?? "none",
+          video_status: clip?.status ?? "queued",
+          animation_model: meta.animation_model ?? null,
+          bible_overrides: clip?.bible_overrides ?? {},
+        },
+      });
+    } else {
+      // mae / legacy fallback
+      suffix = buildAriContextSuffix({
+        title,
+        character_sheet: sheet,
+        aesthetic_bible: bible,
+      });
+    }
 
     // Collect + sign every reference image (per character, per bible).
     // Each gets a short-lived URL and a labeled text anchor so Claude
@@ -187,9 +348,8 @@ export async function POST(request: NextRequest) {
         content: `${body.message}\n${initialContextSuffix}`,
       };
 
-  const systemPrompt =
-    body.mode === "mae" ? MAE_SYSTEM_PROMPT : ARI_SYSTEM_PROMPT;
-  const tools = body.mode === "mae" ? MAE_TOOLS : ARI_TOOLS;
+  const systemPrompt = pickSystemPrompt(body.mode);
+  const tools = pickTools(body.mode);
 
   const baseHistory: OpenRouterMessage[] = [
     { role: "system", content: systemPrompt },
@@ -270,6 +430,7 @@ export async function POST(request: NextRequest) {
                 projectId: project!.id,
                 origin: toolOrigin,
                 cookieHeader: toolCookies,
+                sceneId: body.scene_id,
               },
             );
 
@@ -351,7 +512,10 @@ export async function POST(request: NextRequest) {
               project_id: project!.id,
               role: "assistant",
               content: accumulated,
-              chat_mode: body.mode,
+              chat_mode: persistedMode,
+              ...(persistedMode === "scene" && body.scene_id
+                ? { scene_id: body.scene_id }
+                : {}),
             })
             .then(({ error }) => {
               if (error) {
@@ -374,6 +538,7 @@ export async function POST(request: NextRequest) {
             attachment_count: attachedImageUrls.length,
             tool_loop: true,
             mode: body.mode,
+            ...(body.scene_id ? { scene_id: body.scene_id } : {}),
           },
         });
       }

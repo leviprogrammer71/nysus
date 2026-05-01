@@ -21,6 +21,9 @@ const patchSchema = z
     character_sheet: z.unknown().optional(),
     aesthetic_bible: z.unknown().optional(),
     draft_mode: z.boolean().optional(),
+    current_stage: z
+      .enum(["concept", "script", "scenes", "image", "animate", "stitch"])
+      .optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "No fields to update",
@@ -42,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
   const { data, error } = await supabase
     .from("projects")
-    .select("id, title, description, draft_mode, share_token, share_enabled, updated_at")
+    .select("id, title, description, draft_mode, share_token, share_enabled, current_stage, updated_at")
     .eq("id", id)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -77,6 +80,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     character_sheet?: CharacterSheet;
     aesthetic_bible?: AestheticBible;
     draft_mode?: boolean;
+    current_stage?:
+      | "concept"
+      | "script"
+      | "scenes"
+      | "image"
+      | "animate"
+      | "stitch";
   } = {};
   if (body.title !== undefined) update.title = body.title;
   if (body.description !== undefined) update.description = body.description;
@@ -85,6 +95,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (body.aesthetic_bible !== undefined)
     update.aesthetic_bible = body.aesthetic_bible as AestheticBible;
   if (body.draft_mode !== undefined) update.draft_mode = body.draft_mode;
+  if (body.current_stage !== undefined)
+    update.current_stage = body.current_stage;
 
   const { data, error } = await supabase
     .from("projects")

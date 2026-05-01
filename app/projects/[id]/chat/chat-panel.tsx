@@ -12,18 +12,31 @@ export function ChatPanel({
   projectId,
   initialMessages,
   onGenerate,
-  mode = "ari",
+  mode = "script",
+  sceneId,
   prefillEventName = "nysus:prefill-chat",
+  placeholder,
 }: {
   projectId: string;
   initialMessages: ChatMessage[];
   onGenerate?: (shot: ShotPrompt) => Promise<void>;
-  /** Which half of the director to address. Defaults to Ari (planner). */
-  mode?: "ari" | "mae";
+  /**
+   * Which thread to address.
+   *   ari      — legacy alias, treated as Liturgy on the server.
+   *   mae      — legacy executor chat (read-only history).
+   *   concept  — Oracle: free-form ideation pre-Liturgy.
+   *   script   — Liturgy: scene drafting (json-shot blocks).
+   *   scene    — Rite: per-scene refinement, requires sceneId.
+   */
+  mode?: "ari" | "mae" | "concept" | "script" | "scene";
+  /** Required when mode === "scene" — the clip the Rite is bound to. */
+  sceneId?: string;
   /** Custom event name this panel listens for when another component
    *  wants to prefill its textarea. Each panel uses a unique name so
    *  side-by-side Ari + Mae don't steal each other's input. */
   prefillEventName?: string;
+  /** Optional placeholder override per mode. */
+  placeholder?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -259,6 +272,7 @@ export function ChatPanel({
           project_id: projectId,
           message: messageToSend,
           mode,
+          ...(sceneId ? { scene_id: sceneId } : {}),
           ...(attachedUrls.length > 0
             ? { attached_image_urls: attachedUrls }
             : {}),
@@ -315,7 +329,7 @@ export function ChatPanel({
       // update without a manual reload.
       router.refresh();
     }
-  }, [streaming, projectId, attachments, router]);
+  }, [streaming, projectId, attachments, mode, sceneId, router]);
 
   const send = useCallback(async () => {
     const text = input;
@@ -354,7 +368,7 @@ export function ChatPanel({
             />
           ))
         ) : (
-          <ModeGreeting mode={mode} />
+          <ModeGreeting mode={mode === "ari" ? "script" : mode} />
         )}
 
         {error ? (
@@ -541,7 +555,16 @@ export function ChatPanel({
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={mode === "mae" ? "tell Mae what to build…" : "tell Ari the story…"}
+            placeholder={
+              placeholder ??
+              (mode === "concept"
+                ? "speak to the Oracle…"
+                : mode === "scene"
+                ? "rework this scene with Ari…"
+                : mode === "mae"
+                ? "tell Mae what to build…"
+                : "lay the scenes — tell Ari the through-line…")
+            }
             rows={2}
             disabled={streaming}
             enterKeyHint="send"
@@ -640,12 +663,15 @@ export function ChatPanel({
 }
 
 /**
- * Pre-first-message greeting. Ari opens the conversation pane with a
- * planning offer; Mae opens the execution pane with a builder stance.
- * The logomark animates on both — every time you see the director,
- * the mark moves.
+ * Pre-first-message greeting. Each Ari sub-mode opens with a different
+ * stance — Oracle listens, Liturgy drafts, Rite refines. Mae's old
+ * greeting is kept for the legacy chat history view.
  */
-function ModeGreeting({ mode }: { mode: "ari" | "mae" }) {
+function ModeGreeting({
+  mode,
+}: {
+  mode: "mae" | "concept" | "script" | "scene";
+}) {
   if (mode === "mae") {
     return (
       <div className="flex gap-3">
@@ -677,6 +703,58 @@ function ModeGreeting({ mode }: { mode: "ari" | "mae" }) {
       </div>
     );
   }
+  if (mode === "concept") {
+    return (
+      <div className="flex gap-3">
+        <div className="shrink-0 mt-0.5">
+          <Logomark size={28} animated />
+        </div>
+        <div className="flex-1">
+          <div className="mb-2 flex items-center gap-2 font-hand text-sepia-deep text-base">
+            <span>Ari · the Oracle</span>
+          </div>
+          <div className="space-y-3 font-body text-ink leading-relaxed">
+            <p>
+              Tell me what you&rsquo;re reaching for. A sentence, a half-image,
+              a feeling that won&rsquo;t leave you alone. I&rsquo;ll listen for
+              the shape under it.
+            </p>
+            <p>
+              No scenes here yet &mdash; that&rsquo;s the{" "}
+              <span className="font-hand text-sepia-deep">Liturgy</span>. Here
+              we just find the through-line.
+            </p>
+            <p className="font-hand text-ink-soft">what are we reaching for?</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (mode === "scene") {
+    return (
+      <div className="flex gap-3">
+        <div className="shrink-0 mt-0.5">
+          <Logomark size={28} animated />
+        </div>
+        <div className="flex-1">
+          <div className="mb-2 flex items-center gap-2 font-hand text-sepia-deep text-base">
+            <span>Ari · the Rite</span>
+          </div>
+          <div className="space-y-3 font-body text-ink leading-relaxed">
+            <p>
+              One scene. One altar. Tell me what to rework &mdash; the still,
+              the motion, the line. I&rsquo;ll write the change back to the
+              card.
+            </p>
+            <p className="font-hand text-ink-soft">
+              what do we shape on this card?
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // script (Liturgy)
   return (
     <div className="flex gap-3">
       <div className="shrink-0 mt-0.5">
@@ -684,21 +762,17 @@ function ModeGreeting({ mode }: { mode: "ari" | "mae" }) {
       </div>
       <div className="flex-1">
         <div className="mb-2 flex items-center gap-2 font-hand text-sepia-deep text-base">
-          <span>Ari</span>
+          <span>Ari · the Liturgy</span>
         </div>
         <div className="space-y-3 font-body text-ink leading-relaxed">
           <p>
-            Tell me what you&rsquo;re making. A sentence is enough. I&rsquo;ll
-            draft the cast, the aesthetic, and the through-line, and we&rsquo;ll
-            shape it together.
+            The Oracle found the shape; here I write it down. Once the cast
+            and the bible feel set, I&rsquo;ll lay the scenes out in order
+            &mdash; each one a card you can generate from on Mae&rsquo;s board.
           </p>
-          <p>
-            I don&rsquo;t build anything here &mdash; I plan. When the thread
-            feels tight, you hand it to{" "}
-            <span className="font-hand text-sepia-deep">Mae</span> and she
-            turns it into shot cards.
+          <p className="font-hand text-ink-soft">
+            give me the through-line and I&rsquo;ll start drafting.
           </p>
-          <p className="font-hand text-ink-soft">what are we making?</p>
         </div>
       </div>
     </div>

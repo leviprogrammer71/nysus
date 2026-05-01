@@ -7,6 +7,12 @@ import type {
   AestheticBible,
 } from "@/lib/supabase/types";
 import { ReferenceStrip } from "./reference-strip";
+import {
+  IMAGE_MODELS,
+  ANIMATION_MODELS,
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_ANIMATION_MODEL,
+} from "@/lib/models";
 
 /**
  * Structured project editor.
@@ -91,6 +97,12 @@ function normalizeBible(raw: unknown): {
   thematic_motifs: string[];
   forbidden: string[];
   reference_images: string[];
+  // StoryFlow Bible config — Ari's tone + tooling defaults.
+  claude_bluntness: number;
+  claude_avoid_list: string[];
+  claude_genre_leanings: string;
+  default_image_model: string;
+  default_animation_model: string;
 } {
   const o = (raw ?? {}) as Record<string, unknown>;
   const s = (k: string): string =>
@@ -99,6 +111,11 @@ function normalizeBible(raw: unknown): {
     Array.isArray(o[k])
       ? (o[k] as unknown[]).filter((x): x is string => typeof x === "string")
       : [];
+  const bluntnessRaw = o["claude_bluntness"];
+  const bluntness =
+    typeof bluntnessRaw === "number" && Number.isFinite(bluntnessRaw)
+      ? Math.min(5, Math.max(1, Math.round(bluntnessRaw)))
+      : 5;
   return {
     visual_style: s("visual_style"),
     palette: s("palette"),
@@ -108,6 +125,12 @@ function normalizeBible(raw: unknown): {
     thematic_motifs: arr("thematic_motifs"),
     forbidden: arr("forbidden"),
     reference_images: arr("reference_images"),
+    claude_bluntness: bluntness,
+    claude_avoid_list: arr("claude_avoid_list"),
+    claude_genre_leanings: s("claude_genre_leanings"),
+    default_image_model: s("default_image_model") || DEFAULT_IMAGE_MODEL,
+    default_animation_model:
+      s("default_animation_model") || DEFAULT_ANIMATION_MODEL,
   };
 }
 
@@ -167,6 +190,16 @@ function buildAestheticBible(b: ReturnType<typeof normalizeBible>): AestheticBib
   if (forbidden.length > 0) out.forbidden = forbidden;
   // Preserve mood-board refs managed by the ReferenceStrip.
   if (b.reference_images.length > 0) out.reference_images = b.reference_images;
+
+  // StoryFlow config. We always emit bluntness + defaults so a fresh
+  // bible never silently falls back to "1 / no model picked".
+  out.claude_bluntness = b.claude_bluntness;
+  const avoid = b.claude_avoid_list.map((w) => w.trim()).filter(Boolean);
+  if (avoid.length > 0) out.claude_avoid_list = avoid;
+  if (b.claude_genre_leanings.trim())
+    out.claude_genre_leanings = b.claude_genre_leanings.trim();
+  out.default_image_model = b.default_image_model;
+  out.default_animation_model = b.default_animation_model;
   return out;
 }
 
@@ -603,7 +636,164 @@ function StructuredEditor({
           these alongside the text fields above.
         </p>
       </section>
+
+      <div className="rule-ink" />
+
+      <BibleConfigSection bible={bible} setBible={setBible} />
     </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// The Bible Config — Ari's tone, taboo vocabulary, genre leanings,
+// and the default forge-models for stills + motion. Ari reads this
+// bible at the top of every turn.
+// ------------------------------------------------------------------
+
+function BibleConfigSection({
+  bible,
+  setBible,
+}: {
+  bible: ReturnType<typeof normalizeBible>;
+  setBible: React.Dispatch<React.SetStateAction<ReturnType<typeof normalizeBible>>>;
+}) {
+  const bluntnessLabels = [
+    "deferential — asks before asserting",
+    "soft — leans gentle",
+    "balanced — collaborator",
+    "frank — speaks up unprompted",
+    "oracle — tells you the truth, even when it stings",
+  ];
+  const bluntnessLabel = bluntnessLabels[bible.claude_bluntness - 1] ?? bluntnessLabels[4];
+
+  return (
+    <section className="flex flex-col gap-5">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="font-display text-2xl text-ink">the bible</h2>
+        <span className="font-hand text-sepia-deep text-sm">
+          how Ari speaks · what she will not say · which forges to use
+        </span>
+      </div>
+
+      {/* Bluntness — Ariadne's voice ---------------------------------- */}
+      <div className="flex flex-col gap-2 bg-paper-deep px-4 py-4 border border-ink/10">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <span className="font-hand text-sepia-deep text-sm">
+            Ari&rsquo;s bluntness
+          </span>
+          <span className="font-display text-xs uppercase tracking-[0.18em] text-ink-soft/70">
+            {bible.claude_bluntness} / 5
+          </span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={5}
+          step={1}
+          value={bible.claude_bluntness}
+          onChange={(e) =>
+            setBible((b) => ({
+              ...b,
+              claude_bluntness: Math.min(5, Math.max(1, Number(e.target.value))),
+            }))
+          }
+          aria-label="Ari's bluntness"
+          className="w-full accent-ink"
+        />
+        <div className="flex items-center justify-between font-body text-[10px] uppercase tracking-widest text-ink-soft/55">
+          <span>quiet</span>
+          <span>oracle</span>
+        </div>
+        <p className="font-body text-xs text-ink-soft leading-relaxed">
+          {bluntnessLabel}
+        </p>
+      </div>
+
+      {/* Avoid list — taboo vocabulary -------------------------------- */}
+      <ListEditor
+        label="Ari's avoid list"
+        items={bible.claude_avoid_list}
+        placeholder='e.g. "epic", "stunning", "vibrant"'
+        tone="red"
+        onChange={(next) => setBible((b) => ({ ...b, claude_avoid_list: next }))}
+      />
+      <p className="font-body text-xs text-ink-soft/60 -mt-2 leading-relaxed">
+        Words Ari + Mae will not put in any prompt or reply. Use this to kill
+        AI-tasting clich&eacute;s before they spread.
+      </p>
+
+      {/* Genre leanings ----------------------------------------------- */}
+      <LabeledTextarea
+        label="genre leanings"
+        value={bible.claude_genre_leanings}
+        rows={3}
+        placeholder="A24 dread, mythic-lit shorts, Tarkovsky long-takes — anything that anchors taste."
+        onChange={(v) => setBible((b) => ({ ...b, claude_genre_leanings: v }))}
+      />
+
+      {/* Default models — the forges ---------------------------------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <ModelSelect
+          label="default still forge"
+          modelKind="image"
+          value={bible.default_image_model}
+          onChange={(v) =>
+            setBible((b) => ({ ...b, default_image_model: v }))
+          }
+        />
+        <ModelSelect
+          label="default motion forge"
+          modelKind="animation"
+          value={bible.default_animation_model}
+          onChange={(v) =>
+            setBible((b) => ({ ...b, default_animation_model: v }))
+          }
+        />
+      </div>
+      <p className="font-body text-xs text-ink-soft/60 -mt-2 leading-relaxed">
+        Picks the model every new scene reaches for first. Each scene can still
+        override its own forge in the rite.
+      </p>
+    </section>
+  );
+}
+
+function ModelSelect({
+  label,
+  modelKind,
+  value,
+  onChange,
+}: {
+  label: string;
+  modelKind: "image" | "animation";
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const options =
+    modelKind === "image"
+      ? Object.values(IMAGE_MODELS)
+      : Object.values(ANIMATION_MODELS);
+  const active = options.find((m) => m.id === value);
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="font-hand text-sepia-deep text-sm">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-11 px-3 bg-paper border border-ink/20 focus:border-ink font-body text-ink outline-none transition-colors"
+      >
+        {options.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+      {active ? (
+        <span className="font-body text-[11px] text-ink-soft/70 leading-relaxed">
+          {active.description}
+        </span>
+      ) : null}
+    </label>
   );
 }
 

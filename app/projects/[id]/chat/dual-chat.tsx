@@ -16,11 +16,9 @@ import { AriGlyph, MaeGlyph } from "@/app/components/mythic-glyphs";
  * execution crew shouldn't share the visual field. You're in one room
  * or the other.
  *
- *   Ari  — Ariadne, the thread-holder. Planning + conversation.
- *   Mae  — Maenads, the doers. Emits shot cards + portraits.
- *
- * A "Send to Mae" CTA in Ari's header prefills Mae's textarea with a
- * handoff message and scrolls the container to her pane.
+ *   Ari  — Ariadne, the thread-holder. Planning + scene drafting.
+ *          Subtoggles Oracle (concept) ↔ Liturgy (script).
+ *   Mae  — Maenads, the doers. Silent SceneBoard.
  *
  * Prefill events are namespaced per-pane so the two don't steal each
  * other's input:
@@ -30,15 +28,35 @@ import { AriGlyph, MaeGlyph } from "@/app/components/mythic-glyphs";
 export function DualChat({
   projectId,
   initialAriMessages,
+  initialConceptMessages,
+  initialScriptMessages,
   clips,
   onGenerate,
 }: {
   projectId: string;
+  /** Legacy alias — points at the Liturgy ledger. */
   initialAriMessages: ChatMessage[];
+  /** Oracle (concept) ledger — pre-Liturgy ideation. */
+  initialConceptMessages?: ChatMessage[];
+  /** Liturgy (script) ledger — scene drafting + legacy "ari" rows. */
+  initialScriptMessages?: ChatMessage[];
   /** Live clip rows for the project — Mae's board renders these. */
   clips: TimelineClip[];
   onGenerate?: (shot: ShotPrompt) => Promise<void>;
 }) {
+  // Ari has two sub-modes the user toggles between:
+  //   concept (the Oracle) — free-form ideation, no scene cards
+  //   script  (the Liturgy) — scene drafting; emits json-shot blocks
+  // The Rite (scene mode) is opened from a scene card on Mae's
+  // board, not from this top-level switch.
+  const conceptMessages = initialConceptMessages ?? [];
+  const scriptMessages = initialScriptMessages ?? initialAriMessages;
+  const [ariMode, setAriMode] = useState<"concept" | "script">(
+    // Default to whichever ledger has the most recent activity. Fall
+    // back to Oracle if both are empty so first-run users hit the
+    // ideation pane first.
+    scriptMessages.length > 0 ? "script" : "concept",
+  );
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [activePane, setActivePane] = useState<"ari" | "mae">("ari");
 
@@ -139,10 +157,25 @@ export function DualChat({
               Send to Mae →
             </button>
           </header>
+
+          {/* Ari sub-mode toggle — Oracle (concept) ↔ Liturgy (script).
+              Each ledger has its own thread on the server, so flipping
+              modes mounts a fresh ChatPanel via the `key` prop and the
+              user sees their saved messages for that mode. */}
+          <AriModeToggle
+            mode={ariMode}
+            onChange={setAriMode}
+            conceptCount={conceptMessages.length}
+            scriptCount={scriptMessages.length}
+          />
+
           <ChatPanel
+            key={`ari-${ariMode}`}
             projectId={projectId}
-            initialMessages={initialAriMessages}
-            mode="ari"
+            initialMessages={
+              ariMode === "concept" ? conceptMessages : scriptMessages
+            }
+            mode={ariMode}
             prefillEventName="nysus:prefill-chat:ari"
           />
         </section>
@@ -178,6 +211,87 @@ export function DualChat({
           <MaeBoard projectId={projectId} clips={clips} />
         </section>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Sub-mode pill toggle for Ari's pane: Oracle (concept) ↔ Liturgy (script).
+ * Sits between the pane header and the chat panel. Each pill shows
+ * the mythological subtitle in lowercase hand, with a tiny dot when
+ * that mode has stored messages so the user can see which ledgers
+ * have history at a glance.
+ */
+function AriModeToggle({
+  mode,
+  onChange,
+  conceptCount,
+  scriptCount,
+}: {
+  mode: "concept" | "script";
+  onChange: (m: "concept" | "script") => void;
+  conceptCount: number;
+  scriptCount: number;
+}) {
+  const items: Array<{
+    id: "concept" | "script";
+    label: string;
+    sub: string;
+    count: number;
+  }> = [
+    {
+      id: "concept",
+      label: "Oracle",
+      sub: "the seed",
+      count: conceptCount,
+    },
+    {
+      id: "script",
+      label: "Liturgy",
+      sub: "the thread",
+      count: scriptCount,
+    },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Ari sub-mode"
+      className="mb-2 inline-flex items-center gap-1 rounded-full border border-ink/10 bg-paper-deep p-1"
+    >
+      {items.map((it) => {
+        const active = mode === it.id;
+        return (
+          <button
+            key={it.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(it.id)}
+            className={`group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors animate-press ${
+              active
+                ? "bg-paper text-ink shadow-[0_1px_3px_rgba(27,42,58,0.08)]"
+                : "text-ink-soft/70 hover:text-ink"
+            }`}
+          >
+            <span className="font-display text-[10px] uppercase tracking-[0.22em] leading-none">
+              {it.label}
+            </span>
+            <span
+              className={`font-hand text-[11px] leading-none ${
+                active ? "text-sepia-deep" : "text-ink-soft/55"
+              }`}
+            >
+              · {it.sub}
+            </span>
+            {it.count > 0 && !active ? (
+              <span
+                aria-hidden
+                className="ml-0.5 h-1 w-1 rounded-full bg-sepia-deep/70"
+              />
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
