@@ -118,8 +118,8 @@ export function BottomNav() {
     key: "home",
     label: "Home",
     icon: <IconHome />,
-    href: "/",
-    active: pathname === "/",
+    href: "/dashboard",
+    active: pathname === "/" || pathname === "/dashboard",
   });
 
   if (onProjectPage && projectId) {

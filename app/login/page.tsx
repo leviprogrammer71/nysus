@@ -44,7 +44,7 @@ export default async function LoginPage({
 
 /** Only allow relative paths starting with / to prevent open redirect. */
 function sanitizeReturn(raw?: string): string {
-  const fallback = "/video?mode=listing";
+  const fallback = "/dashboard";
   if (!raw) return fallback;
   if (!raw.startsWith("/")) return fallback;
   if (raw.startsWith("//")) return fallback;

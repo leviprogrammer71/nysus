@@ -41,7 +41,7 @@ export async function signIn(
   const returnTo =
     typeof rawReturn === "string" && rawReturn.startsWith("/") && !rawReturn.startsWith("//")
       ? rawReturn
-      : "/video?mode=listing";
+      : "/dashboard";
 
   if (!email || !email.includes("@")) {
     return { ok: false, message: "Enter a valid email." };

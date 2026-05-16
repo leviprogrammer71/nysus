@@ -4,6 +4,8 @@ import { GalleryStrip } from "./components/gallery-strip";
 import { LandingChatPreview } from "./components/landing-chat-preview";
 import { loadGallery } from "@/lib/gallery";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Public landing page.
  *
@@ -17,7 +19,12 @@ import { loadGallery } from "@/lib/gallery";
  * redirects signed-in users to /dashboard.
  */
 export default async function LandingPage() {
-  const entries = await loadGallery({ limit: 12 });
+  let entries: Awaited<ReturnType<typeof loadGallery>> = [];
+  try {
+    entries = await loadGallery({ limit: 12 });
+  } catch {
+    // Supabase may not be configured yet — render with empty gallery.
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-5 py-5 sm:px-6 sm:py-6">
@@ -43,7 +50,7 @@ export default async function LandingPage() {
             Pricing
           </Link>
           <Link
-            href="/login?next=%2Fvideo%3Fmode%3Dlisting"
+            href="/login?next=%2Fdashboard"
             className="ml-1 inline-flex h-11 items-center rounded-full bg-ink px-4 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft transition-colors animate-press"
           >
             New film →
@@ -77,7 +84,7 @@ export default async function LandingPage() {
             browser.
           </p>
           <div className="mt-6 flex flex-col gap-2 sm:mt-7 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <Link href="/login?next=%2Fvideo%3Fmode%3Dlisting" className="btn-primary w-full sm:w-auto">
+            <Link href="/login?next=%2Fdashboard" className="btn-primary w-full sm:w-auto">
               Start a film →
             </Link>
             <Link href="/gallery" className="btn-secondary w-full sm:w-auto">
@@ -97,7 +104,7 @@ export default async function LandingPage() {
         emptyMessage="Directors' work will appear here as people publish their first cuts."
       />
 
-      {/* What we hand back — ink-block done-for-you positioning */}
+      {/* What we hand back */}
       <section className="mb-10 rounded-xl bg-ink px-6 py-8 sm:px-8 sm:py-10">
         <p className="font-body text-[10px] uppercase tracking-[0.28em] text-paper/50">
           What we hand back
@@ -106,16 +113,14 @@ export default async function LandingPage() {
           One finished <span className="text-highlight">MP4</span>.
         </h2>
         <p className="mt-3 max-w-xl font-body text-[15px] leading-[1.6] text-paper/75">
-          1080p vertical. Your price, location, realtor name, and brokerage
-          burned in as cinematic overlays. Multi-clip reels stitched into a
-          single download — done-for-you, post-ready. Drop it on Reels and
-          walk away.
+          1080p vertical. Multi-clip reels stitched into a single download,
+          post-ready. Drop it on Reels and walk away.
         </p>
         <Link
-          href="/login?next=%2Fvideo%3Fmode%3Dlisting"
+          href="/login?next=%2Fdashboard"
           className="mt-5 inline-flex h-11 items-center rounded-full bg-paper px-5 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-paper-deep transition-colors animate-press"
         >
-          Try the Listing Bundle →
+          Start creating →
         </Link>
       </section>
 
@@ -164,7 +169,7 @@ export default async function LandingPage() {
           <Link href="/pricing" className="hover:text-ink">
             Pricing
           </Link>
-          <Link href="/login?next=%2Fvideo%3Fmode%3Dlisting" className="hover:text-ink">
+          <Link href="/login" className="hover:text-ink">
             Sign in
           </Link>
         </div>

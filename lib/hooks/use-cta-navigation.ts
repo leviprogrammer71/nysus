@@ -5,10 +5,9 @@ import { useCallback } from "react";
 
 /**
  * Default CTA destination across the product. Every "Begin", "Get
- * Started", and "New Film" button should point here — the done-for-you
- * Listing Bundle category picker.
+ * Started", and "New Film" button should point here.
  */
-const DEFAULT_CTA = "/video?mode=listing";
+const DEFAULT_CTA = "/projects/new";
 
 /**
  * Navigate to the primary CTA destination. Wraps useRouter so callers
@@ -28,7 +27,7 @@ export function useCtaNavigation() {
 /**
  * Returns the correct CTA href based on auth state. Unauthenticated
  * users land on /login with a `next` param that bounces them to the
- * video flow after sign-in; authenticated users go straight there.
+ * dashboard after sign-in; authenticated users go straight to new project.
  */
 export function useSmartCTA(isAuthenticated: boolean) {
   const dest = DEFAULT_CTA;

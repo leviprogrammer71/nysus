@@ -11,9 +11,9 @@ import { createPrediction, getPrediction } from "@/lib/replicate";
  * a single stitched MP4 with text overlays burned in.
  *
  * Overlays:
- *   - location: top-left
- *   - price: large bottom-left (only if show_price)
- *   - realtor + brokerage: bottom-right
+ *   - title: top-left
+ *   - subtitle: bottom-left
+ *   - credits: bottom-right
  *   - AI watermark: small bottom-center
  */
 
@@ -24,11 +24,10 @@ const bodySchema = z.object({
   clip_urls: z.array(z.string().url()).min(1).max(20),
   overlays: z
     .object({
-      location: z.string().optional(),
-      price: z.string().optional(),
-      show_price: z.boolean().default(false),
-      realtor: z.string().optional(),
-      brokerage: z.string().optional(),
+      title: z.string().optional(),
+      subtitle: z.string().optional(),
+      show_subtitle: z.boolean().default(false),
+      credits: z.string().optional(),
     })
     .optional(),
 });
@@ -43,22 +42,19 @@ function buildOverlayFilter(
   const draws: string[] = [];
   const font = "fontsize=28:fontcolor=white:borderw=2:bordercolor=black@0.6";
 
-  if (overlays.location) {
+  if (overlays.title) {
     draws.push(
-      `drawtext=text='${esc(overlays.location)}':x=32:y=32:${font}`,
+      `drawtext=text='${esc(overlays.title)}':x=32:y=32:${font}`,
     );
   }
-  if (overlays.show_price && overlays.price) {
+  if (overlays.show_subtitle && overlays.subtitle) {
     draws.push(
-      `drawtext=text='${esc(overlays.price)}':x=32:y=h-80:fontsize=48:fontcolor=white:borderw=3:bordercolor=black@0.6`,
+      `drawtext=text='${esc(overlays.subtitle)}':x=32:y=h-80:fontsize=48:fontcolor=white:borderw=3:bordercolor=black@0.6`,
     );
   }
-  if (overlays.realtor || overlays.brokerage) {
-    const line = [overlays.realtor, overlays.brokerage]
-      .filter(Boolean)
-      .join(" | ");
+  if (overlays.credits) {
     draws.push(
-      `drawtext=text='${esc(line)}':x=w-tw-32:y=h-52:${font}`,
+      `drawtext=text='${esc(overlays.credits)}':x=w-tw-32:y=h-52:${font}`,
     );
   }
 

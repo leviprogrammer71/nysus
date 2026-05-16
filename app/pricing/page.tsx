@@ -38,22 +38,6 @@ const plans = [
     ctaHref: "/login?plan=pro",
     featured: true,
   },
-  {
-    name: "Listing Bundle",
-    monthlyPrice: 49,
-    annualPrice: 39,
-    description: "Done-for-you real estate reels.",
-    features: [
-      "Everything in Pro",
-      "Listing Bundle flow",
-      "Price & realtor overlays burned in",
-      "Multi-clip stitch to single MP4",
-      "White-glove deliverable",
-    ],
-    cta: "Start Bundle",
-    ctaHref: "/login?plan=bundle",
-    featured: false,
-  },
 ];
 
 export default function PricingPage() {
@@ -93,7 +77,7 @@ export default function PricingPage() {
         </h1>
         <p className="mt-3 mx-auto max-w-lg font-body text-[15px] text-ink-soft/85 leading-relaxed">
           Start free. Upgrade when you need more renders, server-side stitch, or
-          the done-for-you Listing Bundle.
+          priority rendering.
         </p>
       </section>
 
@@ -125,7 +109,7 @@ export default function PricingPage() {
       </div>
 
       {/* Plan cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
         {plans.map((plan) => {
           const price =
             billing === "annual" ? plan.annualPrice : plan.monthlyPrice;

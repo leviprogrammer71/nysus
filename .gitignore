@@ -39,6 +39,18 @@ yarn-error.log*
 secrets.txt
 secrets.*.txt
 *.secrets
+# Anything that smells like a secret-or-key dump should never be committed.
+keys.txt
+keys.*.txt
+*.keys
+# Vercel env stash (templates with placeholders only — but err on the side
+# of caution since real values may be pasted in for convenience).
+vercel-env.txt
+# One-off SQL credit/admin scripts — keep them local.
+grant-credits.sql
+# Bak/swap files from the editor
+*.bak
+*.orig
 
 # vercel
 .vercel
@@ -66,3 +78,6 @@ next-env.d.ts
 
 # leftover type-probe file that the sandbox fuse mount wouldn't let delete
 lib/type-probe.ts
+
+# scratch replicate sandbox
+my-replicate-app/
