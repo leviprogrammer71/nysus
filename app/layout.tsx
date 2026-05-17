@@ -4,6 +4,7 @@ import "./globals.css";
 import { InstallPrompt } from "./install-prompt";
 import { BottomNav } from "./components/bottom-nav";
 import { MoreMenu } from "./components/more-menu";
+import { WorkspaceShell } from "./components/workspace-shell";
 
 // Director's Desk typography stack — see PROGRESS.md § Design System
 const display = Cormorant_Garamond({
@@ -94,12 +95,15 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-paper text-ink font-body">
         {/*
-          md:pb-0 because the BottomNav is mobile-only. On small
-          screens we reserve the full bar height plus safe-area so
-          fixed content doesn't slide under the nav.
+          WorkspaceShell owns the persistent chrome (desktop sidebar
+          + mobile top bar). It hides itself on landing/login so those
+          pages keep their narrow framing.
+          BottomNav stays mounted globally for mobile in-context
+          actions; pb on this div reserves space for it so fixed
+          content doesn't slide under.
         */}
         <div className="flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-          {children}
+          <WorkspaceShell>{children}</WorkspaceShell>
         </div>
         <BottomNav />
         <MoreMenu />

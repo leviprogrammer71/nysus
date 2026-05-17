@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { DualChat } from "./chat/dual-chat";
 import type { ChatMessage } from "./chat/message";
 import { Timeline } from "./timeline/timeline";
@@ -17,6 +16,7 @@ import { KeepRolling } from "@/app/components/keep-rolling";
 import { DeleteProjectButton } from "@/app/components/delete-project-button";
 import { StageRail } from "@/app/components/stage-rail";
 import type { ProjectStage } from "@/lib/supabase/types";
+import { SectionNav } from "./section-nav";
 
 /**
  * Orchestrates the project workspace: chat, timeline, clip detail.
@@ -201,40 +201,23 @@ export function Workspace({
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 sm:px-6 md:pb-8">
-      {/* Breadcrumb + toolbar — workstation style. Tabs live in the
-          primary nav (BottomNav on mobile, Dashboard link in corner). */}
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 pb-3">
-        <nav
-          aria-label="Breadcrumb"
-          className="flex items-center gap-1.5 font-body text-[11px] uppercase tracking-widest text-ink-soft/70 min-w-0"
-        >
-          <Link href="/dashboard" className="hover:text-ink">
-            Projects
-          </Link>
-          <span aria-hidden>/</span>
-          <span className="truncate text-ink">{projectTitle}</span>
-        </nav>
-        <div className="flex items-center gap-1.5">
-          <Link
-            href={`/projects/${projectId}/edit`}
-            className="inline-flex h-9 items-center rounded-full border border-ink/20 bg-paper px-3 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-ink/5"
-          >
-            Edit
-          </Link>
-          <Link
-            href={`/projects/${projectId}/storyboard`}
-            className="inline-flex h-9 items-center rounded-full border border-ink/20 bg-paper px-3 font-body text-[11px] uppercase tracking-widest text-ink hover:bg-ink/5"
-          >
-            Storyboard
-          </Link>
-          <Link
-            href={`/projects/${projectId}/stitch`}
-            className="inline-flex h-9 items-center rounded-full bg-ink px-3 font-body text-[11px] uppercase tracking-widest text-paper hover:bg-ink-soft"
-          >
-            Stitch →
-          </Link>
-        </div>
-      </header>
+      {/* The SectionNav (project title + Chat/Scenes/Stitch/Bible
+          tabs) is the in-project counterpart to the WorkspaceShell.
+          It owns navigation between the four core surfaces of a film
+          so the user always knows where they are and where they can
+          go next. */}
+      <SectionNav
+        projectId={projectId}
+        projectTitle={projectTitle}
+        active="chat"
+        counts={{
+          scenes: clips.length,
+          rendered: clips.filter((c) => c.status === "complete").length,
+          inFlight: clips.filter(
+            (c) => c.status === "queued" || c.status === "processing",
+          ).length,
+        }}
+      />
 
       {/* Title row with status pill + share + draft toggle */}
       <section className="mb-6 flex flex-wrap items-start justify-between gap-4">

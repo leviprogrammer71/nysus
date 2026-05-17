@@ -1,15 +1,11 @@
 #!/usr/bin/env bash
 # =====================================================================
-# Nysus deploy-fix ship script
+# Nysus ship script
 # =====================================================================
 # Run with:    bash ship.sh
 #
-# What it does:
-#   1. Removes the stale .git/index.lock if one's still there.
-#   2. Stages every legitimate change (and respects the updated .gitignore
-#      so keys.txt, vercel-env.txt, *.bak, etc. NEVER end up in git).
-#   3. Verifies no secret-looking file made it into the index.
-#   4. Commits with a clear message and pushes to origin/main.
+# Stages all legitimate changes (gitignore handles the rest), checks
+# for secret leaks, commits with a clear message, pushes to origin/main.
 # =====================================================================
 
 set -euo pipefail
@@ -18,7 +14,7 @@ cd "$(dirname "$0")"
 echo "→ Releasing any stale git lock…"
 rm -f .git/index.lock 2>/dev/null || true
 
-echo "→ Staging tracked changes (gitignore handles the rest)…"
+echo "→ Staging tracked changes…"
 git add -A
 
 echo "→ Sanity check: no secret-looking file in the staged diff."
@@ -34,29 +30,42 @@ git diff --cached --name-status
 
 echo ""
 echo "→ Committing…"
-git commit -m "Forge expansion + migration-drift guard
+git commit -m "WorkspaceShell + SectionNav — make workspace navigation a core feature
 
-* Model registry: added kling-v3-omni, kling-motion-control-v26,
-  google/veo-3.1, alibaba/happyhorse-1.0. gpt-image-2 stays the default
-  still forge; seedance-2-pro stays the default motion forge. Each
-  entry carries the right Replicate slug, input_image / start_image
-  field, aspect ratios, durations, and approx cost so the Playground
-  and scene-card dropdowns pick them up with zero extra wiring.
+The auth'd app now has a real shell instead of a one-off breadcrumb
+on each page. Wherever you are inside Nysus, the path to every other
+surface is one tap away.
 
-* Project page hardened against migration drift: if 0010's columns
-  (current_stage, bible_overrides) aren't applied yet, the page
-  catches the Postgres 42703 (undefined_column) and falls back to a
-  minimal select instead of crashing the Server Component. Stops the
-  'the reel jammed' error for any deploy that ships ahead of its
-  migration."
+* WorkspaceShell (app/components/workspace-shell.tsx)
+  - Desktop: persistent left rail with Logo, New film, Dashboard,
+    Playground, Gallery, My photos, recent projects switcher, and
+    Profile / Sign out at the bottom.
+  - Mobile: slim top bar (logo + 'Films' switcher sheet) layered on
+    top of the existing BottomNav.
+  - Hides itself on landing, /login, /setup, /share, /pricing, /auth
+    so those pages keep their narrow framing.
+  - Recent projects load via /api/projects/recent (RLS-gated).
+
+* SectionNav (app/projects/[id]/section-nav.tsx)
+  - In-project tab strip: Chat · Scenes · Stitch · Bible.
+  - Each tab anchors or routes to the matching surface and shows
+    counts (e.g. '3/6 rendered') + state pills ('3 rendering').
+  - Replaces the scattered breadcrumb + Edit/Storyboard/Stitch
+    buttons on the workspace, stitch and edit pages with a single
+    consistent rail.
+
+* Layout + chrome
+  - Root layout now mounts <WorkspaceShell> around children so the
+    rail is always-on for authenticated routes.
+  - Workspace.tsx, /projects/[id]/stitch and /projects/[id]/edit all
+    use SectionNav; redundant per-page back-buttons are gone.
+
+Typecheck clean."
 
 echo ""
 echo "→ Pushing to origin/main…"
 git push origin main
 
 echo ""
-echo "✓ Pushed. Vercel will start a new build in ~5 seconds."
-echo ""
-echo "→ NEXT: run the StoryFlow migration on production Supabase."
-echo "  Open Supabase → SQL Editor → New query → paste run-migration-0010.sql → Run."
-echo "  That makes the new columns + generations table actually exist."
+echo "✓ Pushed. Vercel will build in ~5s."
+echo "  https://vercel.com/leviprogrammer71s-projects/nysus/deployments"
