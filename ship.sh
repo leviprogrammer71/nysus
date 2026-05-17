@@ -10,8 +10,6 @@
 #      so keys.txt, vercel-env.txt, *.bak, etc. NEVER end up in git).
 #   3. Verifies no secret-looking file made it into the index.
 #   4. Commits with a clear message and pushes to origin/main.
-#   5. Vercel will auto-build the new commit. Watch:
-#        https://vercel.com/leviprogrammer71s-projects/nysus
 # =====================================================================
 
 set -euo pipefail
@@ -36,33 +34,21 @@ git diff --cached --name-status
 
 echo ""
 echo "→ Committing…"
-git commit -m "Clean Nysus pivot + restore next.config + harden landing prerender
+git commit -m "Forge expansion + migration-drift guard
 
-Removes the leftover Listing Bundle / Vantage Media plumbing so Nysus
-reads as the chat-driven filmmaker app it wants to be, restores the
-next.config that was accidentally stripped (gallery + project images
-broke without images.remotePatterns), and protects the landing page
-build against missing env vars.
+* Model registry: added kling-v3-omni, kling-motion-control-v26,
+  google/veo-3.1, alibaba/happyhorse-1.0. gpt-image-2 stays the default
+  still forge; seedance-2-pro stays the default motion forge. Each
+  entry carries the right Replicate slug, input_image / start_image
+  field, aspect ratios, durations, and approx cost so the Playground
+  and scene-card dropdowns pick them up with zero extra wiring.
 
-Highlights:
-  * /video → redirects to /projects/new (was a Listing Bundle picker)
-  * /pricing → Listing Bundle tier dropped
-  * Login + CTA hook → land on /dashboard, not /video?mode=listing
-  * Stitch overlays generic: title / subtitle / credits
-    (was: location / price / realtor / brokerage)
-  * BottomNav Home → /dashboard
-  * Landing page: try/catch around loadGallery + force-dynamic so a
-    missing env var degrades to an empty gallery instead of a hard
-    prerender error (this was the actual build-blocking bug — the cron
-    removal was unrelated)
-  * next.config.ts restored: images.remotePatterns for **.supabase.co
-    + **.supabase.in + replicate.delivery + pbxt.replicate.delivery,
-    and the security header set (X-Content-Type-Options, Referrer-
-    Policy, X-Frame-Options)
-  * .gitignore widened: keys.txt, *.bak, vercel-env.txt,
-    grant-credits.sql, my-replicate-app/
-
-This unblocks the Vercel deploy once env vars are set on the project."
+* Project page hardened against migration drift: if 0010's columns
+  (current_stage, bible_overrides) aren't applied yet, the page
+  catches the Postgres 42703 (undefined_column) and falls back to a
+  minimal select instead of crashing the Server Component. Stops the
+  'the reel jammed' error for any deploy that ships ahead of its
+  migration."
 
 echo ""
 echo "→ Pushing to origin/main…"
@@ -70,8 +56,7 @@ git push origin main
 
 echo ""
 echo "✓ Pushed. Vercel will start a new build in ~5 seconds."
-echo "  Build status: https://vercel.com/leviprogrammer71s-projects/nysus/deployments"
 echo ""
-echo "→ NEXT: add env vars to the nysus project on Vercel."
-echo "  Settings → Environment Variables → Import .env"
-echo "  Paste the contents of vercel-env.txt (placeholders filled in)."
+echo "→ NEXT: run the StoryFlow migration on production Supabase."
+echo "  Open Supabase → SQL Editor → New query → paste run-migration-0010.sql → Run."
+echo "  That makes the new columns + generations table actually exist."

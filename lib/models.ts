@@ -18,10 +18,14 @@ export type ImageModelId =
   | "flux-kontext-pro";
 
 export type AnimationModelId =
+  | "kling-v3-omni"
+  | "kling-motion-control-v26"
   | "kling-v2-5-turbo-pro"
   | "kling-edit"
   | "kling-motion-control"
-  | "seedance-2-pro";
+  | "seedance-2-pro"
+  | "veo-3"
+  | "happyhorse-1";
 
 export interface ImageModelDef {
   id: ImageModelId;
@@ -113,6 +117,32 @@ export const IMAGE_MODELS: Record<ImageModelId, ImageModelDef> = {
 };
 
 export const ANIMATION_MODELS: Record<AnimationModelId, AnimationModelDef> = {
+  "kling-v3-omni": {
+    id: "kling-v3-omni",
+    label: "Kling 3.0 Omni",
+    description:
+      "Kling 3.0 Omni — multimodal motion. Text + image + reference video, 15s @ 1080p, native audio.",
+    replicate_slug: "kwaivgi/kling-v3-omni-video",
+    aspect_ratios: ["9:16", "16:9", "1:1"],
+    accepts_end_image: true,
+    start_image_field: "start_image",
+    durations: [5, 10, 15],
+    approx_cost_cents: 60,
+    flavor: "either",
+  },
+  "kling-motion-control-v26": {
+    id: "kling-motion-control-v26",
+    label: "Kling Motion Control 2.6",
+    description:
+      "Latest motion-capture / pose-driven Kling. Drive a still with a body-motion reference.",
+    replicate_slug: "kwaivgi/kling-v2.6-motion-control",
+    aspect_ratios: ["9:16", "16:9"],
+    accepts_end_image: false,
+    start_image_field: "start_image",
+    durations: [5, 10],
+    approx_cost_cents: 40,
+    flavor: "either",
+  },
   "kling-v2-5-turbo-pro": {
     id: "kling-v2-5-turbo-pro",
     label: "Kling 2.5 Turbo Pro",
@@ -161,9 +191,37 @@ export const ANIMATION_MODELS: Record<AnimationModelId, AnimationModelDef> = {
     approx_cost_cents: 45,
     flavor: "realistic",
   },
+  "veo-3": {
+    id: "veo-3",
+    label: "Veo 3",
+    description:
+      "Google Veo 3.1. Studio-grade text-to-video + image-to-video with optional audio.",
+    replicate_slug: "google/veo-3.1",
+    aspect_ratios: ["16:9", "9:16"],
+    accepts_end_image: true,
+    start_image_field: "image",
+    durations: [4, 6, 8],
+    approx_cost_cents: 90,
+    flavor: "either",
+  },
+  "happyhorse-1": {
+    id: "happyhorse-1",
+    label: "Happy Horse 1.0",
+    description:
+      "Alibaba's Happy Horse. Text-or-image-to-video, 720p/1080p, 3–15s, 5 aspect ratios.",
+    replicate_slug: "alibaba/happyhorse-1.0",
+    aspect_ratios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    accepts_end_image: false,
+    start_image_field: "image",
+    durations: [3, 5, 8, 10, 12, 15],
+    approx_cost_cents: 70, // 5s @ 1080p ≈ $1.40
+    flavor: "stylized",
+  },
 };
 
 export const DEFAULT_IMAGE_MODEL: ImageModelId = "openai-gpt-image-2";
+// Seedance 2.0 stays default for cinematic realism; Kling 3 Omni is the
+// flagship-stylized choice and Veo 3 is the premium tier.
 export const DEFAULT_ANIMATION_MODEL: AnimationModelId = "seedance-2-pro";
 
 export function imageModel(id: string): ImageModelDef {
