@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { AppTopbar } from "@/app/components/app-topbar";
 import { ProfileForm } from "./profile-form";
 
 export const runtime = "nodejs";
@@ -20,21 +19,20 @@ export default async function ProfilePage() {
     .maybeSingle();
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 sm:px-6 md:pb-10">
-      <AppTopbar email={user.email ?? null} />
-
-      <section className="mb-6">
-        <p className="font-body text-[11px] uppercase tracking-[0.28em] text-ink-soft/70">
-          Account
-        </p>
-        <h1 className="mt-2 font-display text-3xl tracking-tight text-ink sm:text-4xl">
-          Your profile
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 sm:px-6 lg:px-12 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-10 lg:pt-14 md:pb-10">
+      <header className="flex flex-col gap-2 mb-6">
+        <div className="eyebrow">The director</div>
+        <h1 className="font-display text-[44px] sm:text-[56px] leading-[1] text-ink">
+          Your <span className="italic">name</span> on the{" "}
+          <span className="highlight">poster</span>.
         </h1>
-        <p className="mt-2 font-body text-sm text-ink-soft/80 leading-relaxed">
+        <p className="font-hand text-[20px] text-[color:var(--color-sepia-deep)] mt-1 leading-snug max-w-[60ch]">
           Shown on gallery tiles and share pages when you&rsquo;ve set a handle.
-          Nothing here is shared publicly until you set one.
+          Nothing is public until you choose so.
         </p>
-      </section>
+      </header>
+
+      <div className="sepia-rule mb-8" />
 
       <ProfileForm
         email={user.email ?? ""}

@@ -3,21 +3,27 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MaskGlyph } from "./mask-glyph";
 
 /**
  * WorkspaceShell — the persistent chrome of the authenticated app.
  *
- *   Desktop (md+): a left rail with the logo, primary navigation,
- *                  a Recent Projects switcher, and a footer with
- *                  Profile + Sign out. Always visible while you're
- *                  inside the app.
- *   Mobile:        a slim top header with the wordmark + a "Projects"
- *                  switcher button that drops a sheet. The existing
- *                  BottomNav handles in-context actions.
+ * Pulled directly from the design system (Dashboard.html / shell.js):
+ *   - 232px sidebar with paper-grain background.
+ *   - Half-mask glyph + "Nysus" wordmark + "a director's notebook"
+ *     hand-lettered subtitle.
+ *   - Sepia-rule dividers.
+ *   - "Begin a film" CTA bordered in ink that fills on hover.
+ *   - "The desk" nav: Dashboard / The threshold / Gallery / Bibles.
+ *   - "Productions" list — the user's most recent films, each with
+ *     a colored status dot.
+ *   - Monthly-forge usage bar at the bottom in wine-dark.
+ *   - Profile chip + "after Dionysus." sign-off.
  *
- * The shell deliberately hides on public/pre-auth pages (landing,
- * login, setup, auth callback, share-link pages) so they keep their
- * own narrow framing.
+ * On mobile we ship a slim top bar with the mask + wordmark. Below the
+ * fold the existing BottomNav handles in-context actions.
+ *
+ * Hides itself on landing / login / setup / share / pricing / auth.
  */
 
 const PUBLIC_PATHS = ["/", "/login", "/setup", "/auth", "/share", "/pricing"];
@@ -26,9 +32,7 @@ function isPublic(pathname: string): boolean {
   return (
     PUBLIC_PATHS.some(
       (p) => pathname === p || pathname.startsWith(`${p}/`),
-    ) ||
-    // Auth route group
-    pathname.startsWith("/auth/")
+    ) || pathname.startsWith("/auth/")
   );
 }
 
@@ -36,6 +40,13 @@ type RecentProject = {
   id: string;
   title: string;
   updated_at: string;
+  /** Soft state hint for the colored dot — derived client-side. */
+  status?: "ready" | "live" | "draft" | "active";
+};
+
+type UsageSummary = {
+  /** Percentage 0-100 of monthly forge consumed. */
+  percent: number;
 };
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
@@ -43,10 +54,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const hidden = isPublic(pathname);
   const [recent, setRecent] = useState<RecentProject[]>([]);
   const [recentLoaded, setRecentLoaded] = useState(false);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
 
-  // Fetch recent projects once the user lands inside the app. Cheap
-  // call — RLS scopes it — and a re-fetch on path change keeps the
-  // switcher current when the user creates / renames a project.
   useEffect(() => {
     if (hidden) return;
     let canceled = false;
@@ -55,7 +64,25 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       .then((body) => {
         if (canceled) return;
         const list = Array.isArray(body.projects) ? body.projects : [];
-        setRecent(list);
+        // Derive a soft status hint per project so the dots aren't
+        // all the same color. Most-recent = highlight (in motion).
+        const now = Date.now();
+        const decorated: RecentProject[] = list.map(
+          (p: RecentProject, i: number) => {
+            const ageMs = now - new Date(p.updated_at).getTime();
+            const days = ageMs / (1000 * 60 * 60 * 24);
+            const status: RecentProject["status"] =
+              i === 0
+                ? "active"
+                : days < 1
+                ? "ready"
+                : days < 7
+                ? "live"
+                : "draft";
+            return { ...p, status };
+          },
+        );
+        setRecent(decorated);
         setRecentLoaded(true);
       })
       .catch(() => setRecentLoaded(true));
@@ -64,218 +91,216 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
     };
   }, [hidden, pathname]);
 
+  // Usage probe (best-effort — degrades silently).
+  useEffect(() => {
+    if (hidden) return;
+    let canceled = false;
+    fetch("/api/usage/summary", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((body) => {
+        if (canceled) return;
+        if (typeof body?.percent === "number") setUsage({ percent: body.percent });
+      })
+      .catch(() => undefined);
+    return () => {
+      canceled = true;
+    };
+  }, [hidden, pathname]);
+
   if (hidden) return <>{children}</>;
 
-  // Which top-level surface we're on, for highlighting nav.
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/);
   const activeProjectId = projectMatch?.[1] ?? null;
-  const surface: "dashboard" | "project" | "playground" | "gallery" | "photos" | "profile" | "other" =
+  const surface: "dashboard" | "threshold" | "gallery" | "bibles" | "workspace" | "other" =
     pathname === "/dashboard"
       ? "dashboard"
       : activeProjectId
-      ? "project"
+      ? "workspace"
       : pathname.startsWith("/playground")
-      ? "playground"
+      ? "threshold"
       : pathname.startsWith("/gallery")
       ? "gallery"
-      : pathname.startsWith("/my-photos")
-      ? "photos"
-      : pathname.startsWith("/profile")
-      ? "profile"
+      : pathname.startsWith("/projects") || pathname.startsWith("/my-photos")
+      ? "bibles"
       : "other";
 
+  const navItems: Array<{
+    key: typeof surface;
+    label: string;
+    hint: string;
+    hintHand?: boolean;
+    href: string;
+  }> = [
+    { key: "dashboard", label: "Dashboard", hint: "⌘1", href: "/dashboard" },
+    {
+      key: "threshold",
+      label: "The threshold",
+      hint: "playground",
+      hintHand: true,
+      href: "/playground",
+    },
+    { key: "gallery", label: "Gallery", hint: "", href: "/gallery" },
+    { key: "bibles", label: "My photos", hint: "", href: "/my-photos" },
+  ];
+
   return (
-    <div className="flex min-h-screen w-full">
-      {/* === Desktop sidebar === */}
+    <div className="flex min-h-screen w-full paper-grain vignette">
+      {/* === Desktop sidebar (≥lg) === */}
       <aside
         aria-label="Workspace navigation"
-        className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-ink/10 md:bg-paper-deep/40"
+        className="hidden lg:flex flex-col w-[232px] shrink-0 border-r border-[color:var(--color-sepia)]/30 min-h-screen px-5 py-7"
       >
-        <div className="sticky top-0 flex h-screen flex-col">
-          {/* Brand */}
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-4 py-4 border-b border-ink/10 hover:bg-paper transition-colors"
-          >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-ink text-paper font-display text-xs">
-              N
-            </span>
-            <span className="font-display text-sm tracking-[0.22em] text-ink">
-              NYSUS
-            </span>
-          </Link>
-
-          {/* Primary nav */}
-          <nav className="flex flex-col gap-0.5 px-2 py-3 font-body text-[12px]">
-            <PrimaryLink
-              href="/projects/new"
-              label="New film"
-              variant="primary"
-              icon={<IconPlus />}
-            />
-            <PrimaryLink
-              href="/dashboard"
-              label="Dashboard"
-              icon={<IconHome />}
-              active={surface === "dashboard"}
-            />
-            <PrimaryLink
-              href="/playground"
-              label="Playground"
-              icon={<IconForge />}
-              active={surface === "playground"}
-              subtitle="the threshold"
-            />
-            <PrimaryLink
-              href="/gallery"
-              label="Gallery"
-              icon={<IconGallery />}
-              active={surface === "gallery"}
-            />
-            <PrimaryLink
-              href="/my-photos"
-              label="My photos"
-              icon={<IconArchive />}
-              active={surface === "photos"}
-            />
-          </nav>
-
-          {/* Recent projects */}
-          <div className="px-2 pt-2 pb-1 mt-1 border-t border-ink/10">
-            <p className="px-2 py-1 font-body text-[9px] uppercase tracking-[0.22em] text-ink-soft/55">
-              Recent projects
-            </p>
-            <ul className="flex flex-col gap-0.5">
-              {!recentLoaded ? (
-                <li className="px-2 py-1.5 font-hand text-[12px] text-ink-soft/50">
-                  loading…
-                </li>
-              ) : recent.length === 0 ? (
-                <li className="px-2 py-1.5 font-hand text-[12px] text-ink-soft/60">
-                  no films yet — start one
-                </li>
-              ) : (
-                recent.map((p) => (
-                  <li key={p.id}>
-                    <Link
-                      href={`/projects/${p.id}`}
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md font-body text-[12px] transition-colors animate-press ${
-                        activeProjectId === p.id
-                          ? "bg-paper text-ink shadow-[0_1px_3px_rgba(27,42,58,0.08)]"
-                          : "text-ink-soft/75 hover:text-ink hover:bg-paper/60"
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className="inline-block h-1.5 w-1.5 rounded-full bg-sepia-deep/60 shrink-0"
-                      />
-                      <span className="truncate">{p.title || "Untitled"}</span>
-                    </Link>
-                  </li>
-                ))
-              )}
-            </ul>
+        <Link href="/dashboard" className="block group">
+          <div className="flex items-end gap-3">
+            <MaskGlyph size={34} className="-mb-0.5" />
+            <div className="leading-none">
+              <div className="font-display text-[26px] tracking-[0.04em] text-ink">
+                Nysus
+              </div>
+              <div className="font-hand text-[15px] text-[color:var(--color-sepia-deep)] -mt-0.5">
+                a director&rsquo;s notebook
+              </div>
+            </div>
           </div>
+        </Link>
 
-          <div className="flex-1" />
+        <div className="sepia-rule my-6" />
 
-          {/* Footer — profile + sign out */}
-          <div className="px-2 py-3 border-t border-ink/10">
-            <PrimaryLink
-              href="/profile"
-              label="Profile"
-              icon={<IconUser />}
-              active={surface === "profile"}
-            />
-            <form action="/auth/signout" method="POST">
-              <button
-                type="submit"
-                className="w-full mt-0.5 flex items-center gap-2 px-2 py-1.5 rounded-md font-body text-[12px] text-ink-soft/70 hover:text-ink hover:bg-paper/60 transition-colors animate-press"
+        <Link
+          href="/projects/new"
+          className="group flex items-baseline justify-between border border-[color:var(--color-ink)]/70 px-3 py-2.5 hover:bg-ink hover:text-paper transition-colors"
+        >
+          <span className="font-display italic text-[18px]">Begin a film</span>
+          <span className="chev font-mono text-[12px] opacity-70 group-hover:opacity-100">
+            ⟶
+          </span>
+        </Link>
+
+        <nav className="mt-8 space-y-1 text-[14px]">
+          <div className="font-mono text-[10px] tracking-[0.22em] uppercase text-[color:var(--color-ink-soft)] mb-2 pl-2">
+            The desk
+          </div>
+          {navItems.map((n) => {
+            const active = surface === n.key;
+            return (
+              <Link
+                key={n.key}
+                href={n.href}
+                className={`nav-row ${active ? "active" : ""}`}
+                prefetch={false}
               >
-                <span className="inline-flex h-5 w-5 items-center justify-center text-ink-soft/60">
-                  <IconSignOut />
-                </span>
-                Sign out
-              </button>
-            </form>
+                <span>{n.label}</span>
+                {n.hint ? (
+                  <span
+                    className={
+                      n.hintHand
+                        ? "font-hand text-[14px] text-[color:var(--color-sepia-deep)]"
+                        : "font-mono text-[10px] text-[color:var(--color-ink-soft)]"
+                    }
+                  >
+                    {n.hint}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="sepia-rule my-6" />
+
+        <div className="text-[11px]">
+          <div className="font-mono uppercase tracking-[0.22em] text-[color:var(--color-ink-soft)] mb-2">
+            Productions
+          </div>
+          {!recentLoaded ? (
+            <p className="font-hand text-[14px] text-[color:var(--color-sepia-deep)]/70">
+              the page turns…
+            </p>
+          ) : recent.length === 0 ? (
+            <p className="font-hand text-[14px] text-[color:var(--color-sepia-deep)]/80">
+              no films yet — light the first torch
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {recent.slice(0, 6).map((p) => (
+                <li key={p.id} className="flex items-center gap-2">
+                  <ProductionDot status={p.status} />
+                  <Link
+                    href={`/projects/${p.id}`}
+                    className={`font-display text-[15px] truncate hover:text-[color:var(--color-wine-dark)] transition-colors ${
+                      activeProjectId === p.id ? "italic text-ink" : "text-ink"
+                    }`}
+                  >
+                    {p.title || "Untitled"}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Footer — monthly forge bar + profile + sign-off */}
+        <div className="mt-auto pt-8 text-[11px] text-[color:var(--color-ink-soft)]">
+          <div className="font-mono">
+            {usage?.percent != null
+              ? `${Math.round(usage.percent)}% of monthly forge`
+              : "the forge stands ready"}
+          </div>
+          <div className="mt-1 h-[3px] bg-[color:var(--color-paper-deeper)] relative">
+            <div
+              className="absolute inset-y-0 left-0 bg-[color:var(--color-wine-dark)] transition-[width] duration-500"
+              style={{ width: `${usage?.percent ?? 0}%` }}
+            />
+          </div>
+          <Link
+            href="/profile"
+            className="mt-4 flex items-center gap-2 hover:text-ink transition-colors"
+          >
+            <span className="w-6 h-6 rounded-full bg-ink text-paper font-display text-[14px] grid place-items-center">
+              ◉
+            </span>
+            <span className="font-display text-[15px] text-ink">Director</span>
+          </Link>
+          <div className="font-hand text-[14px] text-[color:var(--color-sepia-deep)] mt-4">
+            after Dionysus.
           </div>
         </div>
       </aside>
 
-      {/* === Mobile top header === */}
-      <div className="md:hidden fixed inset-x-0 top-0 z-30 bg-paper/95 backdrop-blur border-b border-ink/10">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <Link href="/dashboard" className="flex items-center gap-1.5">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink text-paper font-display text-[10px]">
-              N
-            </span>
-            <span className="font-display text-xs tracking-[0.22em] text-ink">
-              NYSUS
-            </span>
-          </Link>
-          <ProjectSwitcherMobile
-            recent={recent}
-            activeProjectId={activeProjectId}
-          />
-        </div>
-      </div>
+      {/* === Mobile top bar (<lg) === */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 border-b border-[color:var(--color-sepia)]/30 bg-[color:var(--color-paper)]/95 backdrop-blur">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <MaskGlyph size={22} />
+          <span className="font-display text-[22px] text-ink">Nysus</span>
+        </Link>
+        <MobileSwitcher recent={recent} activeProjectId={activeProjectId} />
+      </header>
 
-      {/* === Main content === */}
-      <main className="flex-1 min-w-0 pt-[44px] md:pt-0">{children}</main>
+      {/* === Main === */}
+      <main className="flex-1 min-w-0 pt-[58px] lg:pt-0">{children}</main>
     </div>
   );
 }
 
-function PrimaryLink({
-  href,
-  label,
-  icon,
-  active,
-  subtitle,
-  variant,
-}: {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  active?: boolean;
-  subtitle?: string;
-  variant?: "primary";
-}) {
-  const base =
-    "flex items-center gap-2 px-2 py-1.5 rounded-md font-body text-[12px] transition-colors animate-press";
-  const styles = variant === "primary"
-    ? "bg-ink text-paper hover:bg-ink-soft"
-    : active
-    ? "bg-paper text-ink shadow-[0_1px_3px_rgba(27,42,58,0.08)]"
-    : "text-ink-soft/80 hover:text-ink hover:bg-paper/60";
+function ProductionDot({ status }: { status?: RecentProject["status"] }) {
+  const color =
+    status === "active"
+      ? "var(--color-highlight)"
+      : status === "ready"
+      ? "var(--color-green-seal)"
+      : status === "live"
+      ? "var(--color-sepia)"
+      : "var(--color-sepia)";
   return (
-    <Link href={href} className={`${base} ${styles}`} prefetch={false}>
-      <span
-        className={`inline-flex h-5 w-5 items-center justify-center shrink-0 ${
-          variant === "primary"
-            ? "text-paper"
-            : active
-            ? "text-sepia-deep"
-            : "text-ink-soft/60"
-        }`}
-      >
-        {icon}
-      </span>
-      <span className="flex-1 truncate">{label}</span>
-      {subtitle ? (
-        <span
-          className={`font-hand text-[10px] leading-none ${
-            variant === "primary" ? "text-paper/70" : "text-ink-soft/50"
-          }`}
-        >
-          · {subtitle}
-        </span>
-      ) : null}
-    </Link>
+    <span
+      className="w-1.5 h-1.5 rounded-full shrink-0"
+      style={{ backgroundColor: color }}
+      aria-hidden
+    />
   );
 }
 
-function ProjectSwitcherMobile({
+function MobileSwitcher({
   recent,
   activeProjectId,
 }: {
@@ -288,11 +313,10 @@ function ProjectSwitcherMobile({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Switch project"
-        className="inline-flex h-8 items-center gap-1 rounded-full border border-ink/20 bg-paper px-3 font-body text-[10px] uppercase tracking-widest text-ink"
+        aria-label="Open menu"
+        className="font-mono text-[11px] tracking-[0.22em] uppercase text-ink"
       >
-        Films
-        <span aria-hidden className="ml-0.5">↓</span>
+        menu
       </button>
       {open ? (
         <div
@@ -302,137 +326,82 @@ function ProjectSwitcherMobile({
           onClick={() => setOpen(false)}
         >
           <div
-            className="absolute inset-x-0 top-0 bg-paper border-b border-ink/10 pb-safe"
+            className="absolute inset-x-0 top-0 paper-grain border-b border-[color:var(--color-sepia)]/30 pb-safe"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-ink/10">
-              <span className="font-display text-sm tracking-[0.22em] text-ink">
-                FILMS
-              </span>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[color:var(--color-sepia)]/30">
+              <span className="font-display text-[22px] text-ink">The desk</span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="font-body text-[11px] uppercase tracking-widest text-ink-soft hover:text-ink"
+                className="font-mono text-[11px] uppercase tracking-[0.22em] text-[color:var(--color-ink-soft)] hover:text-ink"
               >
                 close
               </button>
             </div>
-            <ul className="flex flex-col gap-0 py-2 max-h-[60vh] overflow-y-auto">
-              <li>
-                <Link
-                  href="/projects/new"
-                  onClick={() => setOpen(false)}
-                  className="block px-4 py-3 font-body text-sm text-ink bg-ink/0 hover:bg-paper-deep border-b border-ink/5"
-                >
-                  + New film
-                </Link>
-              </li>
+            <nav className="px-2 py-2 space-y-1 text-[14px]">
+              <Link
+                href="/projects/new"
+                onClick={() => setOpen(false)}
+                className="flex items-baseline justify-between border border-[color:var(--color-ink)]/70 px-3 py-2.5 m-2 hover:bg-ink hover:text-paper transition-colors"
+              >
+                <span className="font-display italic text-[18px]">Begin a film</span>
+                <span className="font-mono text-[12px]">⟶</span>
+              </Link>
+              <Link href="/dashboard" onClick={() => setOpen(false)} className="nav-row">
+                <span>Dashboard</span>
+              </Link>
+              <Link href="/playground" onClick={() => setOpen(false)} className="nav-row">
+                <span>The threshold</span>
+                <span className="font-hand text-[14px] text-[color:var(--color-sepia-deep)]">
+                  playground
+                </span>
+              </Link>
+              <Link href="/gallery" onClick={() => setOpen(false)} className="nav-row">
+                <span>Gallery</span>
+              </Link>
+              <Link href="/my-photos" onClick={() => setOpen(false)} className="nav-row">
+                <span>My photos</span>
+              </Link>
+              <Link href="/profile" onClick={() => setOpen(false)} className="nav-row">
+                <span>Profile</span>
+              </Link>
+            </nav>
+            <div className="sepia-rule my-2" />
+            <div className="px-4 pb-4">
+              <div className="font-mono uppercase tracking-[0.22em] text-[11px] text-[color:var(--color-ink-soft)] mb-2">
+                Productions
+              </div>
               {recent.length === 0 ? (
-                <li className="px-4 py-3 font-hand text-sm text-ink-soft/70">
+                <p className="font-hand text-[15px] text-[color:var(--color-sepia-deep)]">
                   no films yet
-                </li>
+                </p>
               ) : (
-                recent.map((p) => (
-                  <li key={p.id}>
-                    <Link
-                      href={`/projects/${p.id}`}
-                      onClick={() => setOpen(false)}
-                      className={`block px-4 py-3 font-body text-sm border-b border-ink/5 ${
-                        activeProjectId === p.id
-                          ? "bg-paper-deep text-ink"
-                          : "text-ink-soft/85 hover:bg-paper-deep hover:text-ink"
-                      }`}
-                    >
-                      {p.title || "Untitled"}
-                    </Link>
-                  </li>
-                ))
+                <ul className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+                  {recent.map((p) => (
+                    <li key={p.id} className="flex items-center gap-2">
+                      <ProductionDot status={p.status} />
+                      <Link
+                        href={`/projects/${p.id}`}
+                        onClick={() => setOpen(false)}
+                        className={`font-display text-[16px] truncate ${
+                          activeProjectId === p.id ? "italic text-ink" : "text-ink"
+                        }`}
+                      >
+                        {p.title || "Untitled"}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </ul>
+            </div>
+            <div className="px-4 pb-4 font-hand text-[14px] text-[color:var(--color-sepia-deep)]">
+              after Dionysus.
+            </div>
           </div>
         </div>
       ) : null}
     </>
-  );
-}
-
-// --- Icons ---------------------------------------------------------
-
-function Stroke({ children }: { children: React.ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      aria-hidden
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {children}
-    </svg>
-  );
-}
-function IconPlus() {
-  return (
-    <Stroke>
-      <path d="M12 5v14M5 12h14" />
-    </Stroke>
-  );
-}
-function IconHome() {
-  return (
-    <Stroke>
-      <path d="M3 11.2 12 4l9 7.2" />
-      <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
-    </Stroke>
-  );
-}
-function IconForge() {
-  return (
-    <Stroke>
-      <path d="M4 13h12a3 3 0 0 0 3-3" />
-      <path d="M6 13v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3" />
-      <path d="M8 17v3M12 17v3" />
-      <path d="M19 5l1 2-2 1 1 2" />
-    </Stroke>
-  );
-}
-function IconGallery() {
-  return (
-    <Stroke>
-      <rect x="3" y="4" width="18" height="14" rx="1" />
-      <circle cx="9" cy="9" r="1.5" />
-      <path d="m3 16 5-5 4 4 4-3 5 4" />
-    </Stroke>
-  );
-}
-function IconArchive() {
-  return (
-    <Stroke>
-      <rect x="3" y="4" width="18" height="4" rx="1" />
-      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
-      <path d="M10 12h4" />
-    </Stroke>
-  );
-}
-function IconUser() {
-  return (
-    <Stroke>
-      <circle cx="12" cy="9" r="3.5" />
-      <path d="M5 20c1-3.5 4-5.5 7-5.5s6 2 7 5.5" />
-    </Stroke>
-  );
-}
-function IconSignOut() {
-  return (
-    <Stroke>
-      <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
-      <path d="M10 17l-5-5 5-5" />
-      <path d="M5 12h12" />
-    </Stroke>
   );
 }

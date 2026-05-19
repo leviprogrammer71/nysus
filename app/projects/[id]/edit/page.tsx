@@ -17,21 +17,27 @@ export default async function EditProjectPage({ params }: PageProps) {
   if (!project) notFound();
 
   return (
-    <main className="min-h-screen flex flex-col px-4 sm:px-6 py-6 max-w-3xl mx-auto w-full pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-8">
+    <main className="min-h-screen flex flex-col px-4 sm:px-6 lg:px-12 py-6 max-w-[1100px] mx-auto w-full pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-8">
       <SectionNav
         projectId={project.id}
         projectTitle={project.title}
         active="bible"
       />
 
-      <h1 className="font-display text-3xl sm:text-4xl text-ink mb-1 mt-2">
-        <span className="highlight">the bible</span>
-      </h1>
-      <p className="font-hand text-lg text-ink-soft mb-6">
-        cast, aesthetic, voice &mdash; the notes injected into every shot.
-      </p>
+      <header className="flex flex-col gap-3 mt-2 mb-6">
+        <div className="eyebrow">The bible · the film's own knowing</div>
+        <h1 className="font-display text-[44px] sm:text-[56px] leading-[1] text-ink">
+          Everything the film
+          <br />
+          <span className="italic">already knows about itself</span>.
+        </h1>
+        <p className="font-hand text-[20px] text-[color:var(--color-sepia-deep)] max-w-[60ch] leading-snug">
+          cast, aesthetic, voice — every page below is injected into every
+          shot prompt. edit it like a poem.
+        </p>
+      </header>
 
-      <div className="rule-ink mb-6" />
+      <div className="sepia-rule mb-8" />
 
       <ProjectEditForm
         projectId={project.id}

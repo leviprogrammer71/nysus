@@ -1,5 +1,5 @@
 import { LoginForm } from "./login-form";
-import { Logomark } from "@/app/components/logomark";
+import { MaskGlyph } from "@/app/components/mask-glyph";
 import { WelcomeSplash } from "./welcome-splash";
 
 export const metadata = {
@@ -15,27 +15,32 @@ export default async function LoginPage({
   const safeReturn = sanitizeReturn(params.next);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 py-16 paper-grain vignette">
       <WelcomeSplash />
-      <div className="w-full max-w-md flex flex-col items-center gap-8">
+      <div className="w-full max-w-md flex flex-col items-center gap-7">
         <header className="flex flex-col items-center gap-3 text-center">
-          <Logomark size={96} priority animated />
-          <h1 className="font-display text-4xl tracking-[0.2em] text-ink">
-            NYSUS
-          </h1>
-          <p className="font-hand text-lg text-ink-soft">
+          <MaskGlyph size={96} />
+          <div className="leading-none mt-1">
+            <h1 className="font-display text-[40px] tracking-[0.04em] text-ink">
+              Nysus
+            </h1>
+            <p className="font-hand text-[18px] text-[color:var(--color-sepia-deep)] -mt-0.5">
+              a director&rsquo;s notebook
+            </p>
+          </div>
+          <p className="font-hand text-[20px] text-[color:var(--color-sepia-deep)] mt-2">
             open the <span className="highlight">notebook</span>
           </p>
         </header>
 
-        <div className="w-full rule-ink" />
+        <div className="sepia-rule w-full" />
 
         <LoginForm returnTo={safeReturn} />
 
-        <footer className="mt-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.2em] text-ink-soft/60 font-body">
-          <span className="inline-block w-6 h-px bg-ink/30" />
+        <footer className="mt-2 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--color-ink-soft)]">
+          <span className="inline-block w-6 h-px bg-[color:var(--color-sepia)]" />
           <span>after Dionysus</span>
-          <span className="inline-block w-6 h-px bg-ink/30" />
+          <span className="inline-block w-6 h-px bg-[color:var(--color-sepia)]" />
         </footer>
       </div>
     </main>

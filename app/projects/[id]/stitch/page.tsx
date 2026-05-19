@@ -33,7 +33,7 @@ export default async function StitchPage({ params }: PageProps) {
   ).length;
 
   return (
-    <main className="min-h-screen flex flex-col px-4 sm:px-6 py-6 max-w-3xl mx-auto w-full pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-8">
+    <main className="min-h-screen flex flex-col px-4 sm:px-6 lg:px-12 py-6 max-w-[1100px] mx-auto w-full pb-[calc(env(safe-area-inset-bottom)+6rem)] md:pb-8">
       <SectionNav
         projectId={project.id}
         projectTitle={project.title}
@@ -41,14 +41,18 @@ export default async function StitchPage({ params }: PageProps) {
         counts={{ scenes: clips.length, rendered, inFlight }}
       />
 
-      <h1 className="font-display text-3xl sm:text-4xl text-ink mb-1 mt-2">
-        <span className="highlight">stitch</span>
-      </h1>
-      <p className="font-hand text-lg text-ink-soft mb-6">
-        {project.title} &mdash; the final reel
-      </p>
+      <header className="flex flex-col gap-3 mt-2 mb-6">
+        <div className="eyebrow">The cut · stage six of six</div>
+        <h1 className="font-display text-[44px] sm:text-[56px] leading-[1] text-ink">
+          The <span className="italic">final</span>{" "}
+          <span className="highlight">reel</span>.
+        </h1>
+        <p className="font-hand text-[20px] text-[color:var(--color-sepia-deep)] leading-snug">
+          {rendered} of {clips.length} rendered — wind, sever, hand it back.
+        </p>
+      </header>
 
-      <div className="rule-ink mb-6" />
+      <div className="sepia-rule mb-8" />
 
       <StitchView
         clips={clips}

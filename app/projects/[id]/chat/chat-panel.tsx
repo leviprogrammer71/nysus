@@ -62,6 +62,10 @@ export function ChatPanel({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Separate input that opens the camera directly on mobile. Same
+  // `accept`/`multiple` shape so the addFiles handler treats both
+  // sources the same.
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const router = useRouter();
 
@@ -454,6 +458,22 @@ export function ChatPanel({
             e.target.value = "";
           }}
         />
+        {/* Camera-capture input — on mobile, the `capture` attribute
+            instructs the OS to open the rear camera directly instead
+            of the photo library picker. On desktop it falls back to
+            a file picker, which is fine (laptops often have a webcam
+            anyway). Single file to keep capture flows quick. */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
 
         <div className="flex items-end gap-1.5 sm:gap-3">
           <button
@@ -520,10 +540,34 @@ export function ChatPanel({
 
           <button
             type="button"
-            aria-label="Attach image"
+            aria-label="Take a photo"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={streaming || attachments.length >= 8}
+            title="Take a photo with your camera"
+            className="shrink-0 w-10 h-10 rounded-full border border-ink/30 text-ink-soft hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors animate-press animate-icon-hover"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 8h3.5l1.8-2.3a1 1 0 0 1 .8-.4h3.8a1 1 0 0 1 .8.4L16.5 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            aria-label="Attach image from device"
             onClick={() => fileInputRef.current?.click()}
             disabled={streaming || attachments.length >= 8}
-            title="Attach an image (or paste / drop one)"
+            title="Pick from device · or paste / drag in"
             className="shrink-0 w-10 h-10 rounded-full border border-ink/30 text-ink-soft hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
           >
             <svg
@@ -646,7 +690,7 @@ export function ChatPanel({
               {dictation.error}
             </span>
           ) : (
-            <>enter to send · shift+enter for newline · long-press mic for script mode</>
+            <>enter to send · shift+enter for newline · paste / camera / pick · long-press mic for script mode</>
           )}
         </p>
       </form>

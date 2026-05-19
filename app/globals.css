@@ -9,19 +9,20 @@
 */
 
 @theme inline {
-  /* Palette — refined with a subtle warm undertone throughout. */
-  --color-paper:        #F5EFE0;  /* warm cream, main bg */
-  --color-paper-deep:   #EBE3D1;  /* cards, bottom sheets */
+  /* Palette — Director's Desk, locked to the design system spec. */
+  --color-paper:        #F7F1E5;  /* warm cream, main bg */
   --color-paper-soft:   #F0E8D5;  /* subtle mid-layer between paper + paper-deep */
+  --color-paper-deep:   #EBE3CE;  /* cards, bottom sheets */
+  --color-paper-deeper: #DDD2B3;  /* striped placeholders, progress bar track */
   --color-ink:          #1B2A3A;  /* navy-black, primary text + illustrations */
-  --color-ink-soft:     #2C3E50;  /* secondary text */
+  --color-ink-soft:     #4A586B;  /* secondary text */
   --color-ink-faint:    #4A5A6C;  /* disabled / tertiary */
-  --color-sepia:        #B8956A;  /* accents, scribbles */
-  --color-highlight:    #E8D27A;  /* yellow highlighter */
-  --color-sepia-deep:   #8B6F47;  /* hover / pressed */
-  --color-wine-dark:    #5B1A2B;  /* Dionysian brand accent — sparingly */
-  --color-red-grease:   #A0392C;  /* red pencil — errors + critique only */
-  --color-green-seal:   #4A6B4A;  /* success state (rare) */
+  --color-sepia:        #B79A6A;  /* accents, scribbles */
+  --color-sepia-deep:   #8C6F3D;  /* hover / pressed, hand-letter labels */
+  --color-highlight:    #E8B23A;  /* yellow highlighter — chrome-yellow brush */
+  --color-wine-dark:    #7A2F3A;  /* Dionysian brand accent — sparingly */
+  --color-red-grease:   #C0392B;  /* red pencil — errors + critique only */
+  --color-green-seal:   #4A7C59;  /* success / ready dot */
 
   /* Semantic aliases */
   --color-background:   var(--color-paper);
@@ -458,3 +459,269 @@ h1.font-display, h2.font-display, h3.font-display {
 .min-h-safe-screen {
   min-height: calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
+
+/* =====================================================================
+   Director's Desk — design system utilities (from design-prompt mockups)
+   =====================================================================
+   Apply these alongside Tailwind. They give the app its notebook feel:
+   paper grain, sepia hairlines, vine motifs, leaf cards, flame flicker,
+   chapter-link underlines, procession dots, hand-feel form fields.
+   ===================================================================== */
+
+/* Paper grain — barely there candlelit warmth */
+.paper-grain {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(ellipse at top left, rgba(232,178,58,0.06), transparent 55%),
+    radial-gradient(ellipse at bottom right, rgba(122,47,58,0.04), transparent 60%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.43  0 0 0 0 0.24  0 0 0 0.06 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
+}
+.paper-deep-grain {
+  background-color: var(--color-paper-deep);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.34  0 0 0 0 0.18  0 0 0 0.07 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+}
+.ink-grain {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 .9  0 0 0 0 .7  0 0 0 0.05 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+}
+
+/* Candle-lit vignette */
+.vignette {
+  box-shadow:
+    inset 0 0 80px rgba(122,47,58,0.05),
+    inset 0 0 220px rgba(27,42,58,0.06);
+}
+
+/* Chrome-yellow brushstroke behind a word */
+.highlight {
+  background-image: linear-gradient(180deg,
+    transparent 62%,
+    var(--color-highlight) 62%,
+    var(--color-highlight) 92%,
+    transparent 92%);
+  padding: 0 0.08em;
+}
+.highlight-thin {
+  background-image: linear-gradient(180deg,
+    transparent 78%,
+    var(--color-highlight) 78%,
+    var(--color-highlight) 95%,
+    transparent 95%);
+  padding: 0 0.05em;
+}
+
+/* Striped placeholders for stills before generation */
+.still-placeholder {
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(27,42,58,0.07) 0 6px,
+      rgba(27,42,58,0.00) 6px 14px),
+    var(--color-paper-deeper);
+}
+.still-placeholder-dark {
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(247,241,229,0.07) 0 6px,
+      rgba(247,241,229,0.00) 6px 14px),
+    #2a3848;
+  color: var(--color-paper);
+}
+
+/* The Leaf — paper-stack card with sepia hairline + offset shadow lift */
+.leaf {
+  background: var(--color-paper-deep);
+  border: 1px solid rgba(140,111,61,0.35);
+  box-shadow:
+    2px 3px 0 0 rgba(27,42,58,0.04),
+    4px 6px 0 0 rgba(27,42,58,0.025);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.leaf:hover {
+  box-shadow:
+    3px 4px 0 0 rgba(27,42,58,0.06),
+    6px 9px 0 0 rgba(27,42,58,0.035);
+  border-color: rgba(140,111,61,0.55);
+}
+.leaf-flat {
+  background: var(--color-paper-deep);
+  border: 1px solid rgba(140,111,61,0.35);
+}
+
+/* Sepia hand-drawn rules */
+.sepia-rule {
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent, var(--color-sepia) 12%,
+    var(--color-sepia) 88%, transparent);
+  opacity: .65;
+}
+.sepia-rule-tight {
+  height: 1px;
+  background: var(--color-sepia);
+  opacity: .4;
+}
+
+/* Flame flicker — torches, loading marks */
+@keyframes flicker {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  20%      { opacity: .82; transform: scale(0.96); }
+  45%      { opacity: 1;  transform: scale(1.04); }
+  70%      { opacity: .9; transform: scale(0.99); }
+}
+.flicker { animation: flicker 2.4s ease-in-out infinite; transform-origin: center; }
+
+/* Oracle pulse — slow breathing for "Ari is thinking" */
+@keyframes oracle {
+  0%, 100% { opacity: .35; }
+  50%      { opacity: 1; }
+}
+.oracle-pulse { animation: oracle 2.4s ease-in-out infinite; }
+
+/* Page-turn entrances */
+@keyframes leaf-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.leaf-in   { animation: leaf-in .55s ease both; }
+.leaf-in-2 { animation: leaf-in .55s ease .08s both; }
+.leaf-in-3 { animation: leaf-in .55s ease .16s both; }
+.leaf-in-4 { animation: leaf-in .55s ease .24s both; }
+
+/* Recurring vine motif as repeatable gutter */
+.gutter-vine {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='800' viewBox='0 0 44 800' fill='none' stroke='%238C6F3D' stroke-width='1' opacity='0.45'><path d='M22 0 C 12 50, 32 100, 22 160 C 12 220, 32 280, 22 340 C 12 400, 32 460, 22 520 C 12 580, 32 640, 22 700 C 12 740, 24 770, 22 800'/><circle cx='14' cy='80' r='3'/><circle cx='10' cy='86' r='2'/><circle cx='15' cy='88' r='2'/><circle cx='30' cy='240' r='3'/><circle cx='34' cy='246' r='2'/><circle cx='29' cy='248' r='2'/><circle cx='13' cy='420' r='3'/><circle cx='9' cy='426' r='2'/><circle cx='14' cy='428' r='2'/><circle cx='31' cy='600' r='3'/><circle cx='35' cy='606' r='2'/><circle cx='30' cy='608' r='2'/></svg>");
+  background-repeat: repeat-y;
+  background-position: center top;
+}
+
+/* Rosette divider — two faint sepia rules with content in the middle */
+.rosette::before, .rosette::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-sepia), transparent);
+  opacity: .5;
+}
+
+/* Chapter-style CTA — underline grows on hover, chevron drifts */
+.chapter-link .rule {
+  transition: width .35s ease;
+  background: var(--color-ink);
+}
+.chapter-link:hover .rule { width: 4.5rem; }
+.chapter-link:hover .chev { transform: translateX(2px); }
+.chev { transition: transform .3s ease; }
+
+/* Procession dot — six tiny marks; modifiers control state */
+.proc-dot { width: .5rem; height: .5rem; border-radius: 9999px; border: 1px solid rgba(74,88,107,.55); }
+.proc-dot.done    { background: var(--color-ink); border-color: var(--color-ink); }
+.proc-dot.current { background: var(--color-highlight); border: 2px solid var(--color-ink); width: .625rem; height: .625rem; }
+.proc-dot.future  { background: transparent; }
+
+/* Hand-drawn chip for stage labels */
+.stage-pill {
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+/* Eyebrow — small mono uppercase above a display heading */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+/* Form inputs — paper feel, no SaaS chrome */
+.field {
+  background: var(--color-paper);
+  border: 1px solid rgba(140,111,61,0.45);
+  padding: .65rem .85rem;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-ink);
+  width: 100%;
+  outline: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+.field:focus { border-color: var(--color-ink); background: var(--color-paper-deep); }
+.field::placeholder { color: var(--color-sepia-deep); font-style: italic; }
+
+.field-line {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(140,111,61,0.55);
+  padding: .35rem 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--color-ink);
+  width: 100%;
+  outline: none;
+}
+.field-line:focus { border-bottom-color: var(--color-ink); }
+
+/* The button kit — not buttons, more like stamps */
+.btn-ink {
+  background: var(--color-ink); color: var(--color-paper);
+  padding: .65rem 1.1rem;
+  font-family: var(--font-body);
+  font-size: 13px; letter-spacing: 0.06em;
+  border: 1px solid var(--color-ink);
+  transition: background .15s ease;
+}
+.btn-ink:hover { background: #0e1925; }
+.btn-paper {
+  background: var(--color-paper); color: var(--color-ink);
+  padding: .65rem 1.1rem;
+  font-family: var(--font-body); font-size: 13px;
+  border: 1px solid rgba(27,42,58,0.5);
+}
+.btn-paper:hover { background: var(--color-paper-deep); }
+.btn-wine {
+  background: var(--color-wine-dark); color: var(--color-paper);
+  padding: .65rem 1.1rem; font-size: 13px;
+  border: 1px solid var(--color-wine-dark);
+}
+
+/* Sidebar nav row */
+.nav-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .375rem .5rem; font-size: 14px;
+  transition: background .15s ease;
+}
+.nav-row:hover { background: rgba(235,227,206,0.6); }
+.nav-row.active {
+  background: var(--color-paper-deep);
+  border-left: 2px solid var(--color-ink);
+  padding-left: calc(.5rem - 2px);
+}
+
+/* Section nav tabs — Cormorant italic on active, underline rule */
+.section-tab {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--color-ink-soft);
+  padding: .5rem 0;
+  border-bottom: 2px solid transparent;
+  transition: color .15s ease, border-color .15s ease;
+}
+.section-tab:hover { color: var(--color-ink); }
+.section-tab.active {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-ink);
+  font-style: italic;
+}
+
+/* Chat — no bubble. Just typesetting. */
+.msg-user { color: var(--color-ink); }
+.msg-ari  { color: var(--color-ink); }
+.msg-stage { color: var(--color-sepia-deep); font-family: var(--font-hand); font-size: 18px; }
+
+/* Tiny tag pill */
+.tag {
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  padding: .15rem .5rem;
+  border: 1px solid rgba(140,111,61,0.5);
+  color: var(--color-ink-soft);
+  display: inline-flex; align-items: center; gap: .25rem;
+}
+.tag.ink  { background: var(--color-ink); color: var(--color-paper); border-color: var(--color-ink); }
+.tag.wine { background: var(--color-wine-dark); color: var(--color-paper); border-color: var(--color-wine-dark); }
+.tag.green{ background: var(--color-green-seal); color: var(--color-paper); border-color: var(--color-green-seal); }

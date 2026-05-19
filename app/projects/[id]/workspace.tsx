@@ -201,11 +201,6 @@ export function Workspace({
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-6 sm:px-6 md:pb-8">
-      {/* The SectionNav (project title + Chat/Scenes/Stitch/Bible
-          tabs) is the in-project counterpart to the WorkspaceShell.
-          It owns navigation between the four core surfaces of a film
-          so the user always knows where they are and where they can
-          go next. */}
       <SectionNav
         projectId={projectId}
         projectTitle={projectTitle}
@@ -219,21 +214,22 @@ export function Workspace({
         }}
       />
 
-      {/* Title row with status pill + share + draft toggle */}
-      <section className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      {/* Workspace title row — eyebrow + hand subtitle + utility tools */}
+      <section className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl sm:text-4xl text-ink leading-tight">
-            {projectTitle}
-          </h1>
+          <div className="eyebrow">
+            {clips.length === 0
+              ? "A first inkling · open with Ari"
+              : `${clips.length} ${
+                  clips.length === 1 ? "scene" : "scenes"
+                } · stage of the procession`}
+            {inFlightCount > 0 ? ` · ${inFlightCount} rendering` : ""}
+          </div>
           {projectDescription ? (
-            <p className="mt-1 font-body text-sm text-ink-soft/80 leading-relaxed max-w-xl">
+            <p className="font-hand text-[20px] text-[color:var(--color-sepia-deep)] mt-2 leading-snug max-w-[60ch]">
               {projectDescription}
             </p>
           ) : null}
-          <p className="mt-2 font-body text-[10px] uppercase tracking-widest text-ink-soft/60">
-            {clips.length} {clips.length === 1 ? "scene" : "scenes"}
-            {inFlightCount > 0 ? ` · ${inFlightCount} rendering` : ""}
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ShareButton projectId={projectId} />
@@ -352,9 +348,9 @@ function CharacterSheetPanel({
 }) {
   const characters = sheet.characters ?? [];
   return (
-    <section className="mb-6">
-      <h2 className="font-hand text-lg text-sepia-deep mb-2">character sheet</h2>
-      <div className="bg-paper-deep p-4 space-y-4">
+    <section className="mb-8">
+      <div className="eyebrow mb-2">The cast</div>
+      <div className="leaf-flat p-5 space-y-4">
         {characters.length === 0 ? (
           <div className="space-y-3">
             <p className="font-body text-sm text-ink-soft">
@@ -432,9 +428,9 @@ function AestheticBiblePanel({
   const visualStyle =
     typeof bible.visual_style === "string" ? bible.visual_style : null;
   return (
-    <section className="mb-8">
-      <h2 className="font-hand text-lg text-sepia-deep mb-2">aesthetic bible</h2>
-      <div className="bg-paper-deep p-4 space-y-4">
+    <section className="mb-10">
+      <div className="eyebrow mb-2">The aesthetic bible</div>
+      <div className="leaf-flat p-5 space-y-4">
         {visualStyle ? (
           <p className="font-body text-ink leading-relaxed">{visualStyle}</p>
         ) : (
